@@ -124,8 +124,10 @@ CREATE TABLE public.thanksgiving (
   amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
   member_id TEXT,
   member_name TEXT,
+  giver TEXT,
   location TEXT,
   notes TEXT,
+  note TEXT,
   recorded_by JSONB,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -137,6 +139,7 @@ CREATE TABLE public.ministers (
   title TEXT,
   role TEXT,
   bio TEXT,
+  note TEXT,
   photo TEXT,
   display_order INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -146,9 +149,13 @@ CREATE TABLE public.ministers (
 CREATE TABLE public.announcements (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  content TEXT,
+  status TEXT DEFAULT 'draft',
   category TEXT,
   date TEXT,
-  content TEXT,
+  sms_status TEXT DEFAULT 'not-sent',
+  sms_count INT DEFAULT 0,
+  sms_at TIMESTAMPTZ,
   audience TEXT,
   pinned BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL

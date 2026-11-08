@@ -189,11 +189,12 @@
             id: t.id,
             date: t.date,
             amount: Number(t.amount || 0),
-            memberId: t.member_id,
-            memberName: t.member_name,
-            location: t.location,
-            notes: t.notes,
-            recordedBy: t.recorded_by
+            giver: t.giver || t.member_name || '',
+            memberName: t.giver || t.member_name || '',
+            location: t.location || '',
+            note: t.note || t.notes || '',
+            notes: t.note || t.notes || '',
+            recordedBy: t.recorded_by || null
           }));
           rawSetItem(STORES.thanksgiving, JSON.stringify(list));
         }
@@ -211,13 +212,32 @@
         // 9. Ministers
         const { data: ministers, error: minErr } = await client.from('ministers').select('*').order('display_order', { ascending: true });
         if (!minErr && Array.isArray(ministers) && ministers.length > 0) {
-          rawSetItem(STORES.ministers, JSON.stringify(ministers));
+          const formattedMinisters = ministers.map(m => ({
+            id: m.id,
+            name: m.name,
+            role: m.role || '',
+            note: m.note || m.bio || '',
+            photo: m.photo || '',
+            order: Number(m.display_order ?? m.order) || 0
+          }));
+          rawSetItem(STORES.ministers, JSON.stringify(formattedMinisters));
+          window.churchMinisters = formattedMinisters;
         }
 
         // 10. Announcements
         const { data: announcements, error: annErr } = await client.from('announcements').select('*').order('created_at', { ascending: false });
         if (!annErr && Array.isArray(announcements) && announcements.length > 0) {
-          rawSetItem(STORES.announcements, JSON.stringify(announcements));
+          const formattedAnnouncements = announcements.map(a => ({
+            id: a.id,
+            title: a.title,
+            content: a.content || '',
+            status: a.status || 'draft',
+            date: a.date || '',
+            smsStatus: a.sms_status || a.smsStatus || 'not-sent',
+            smsCount: Number(a.sms_count ?? a.smsCount) || 0,
+            smsAt: a.sms_at || a.smsAt || null
+          }));
+          rawSetItem(STORES.announcements, JSON.stringify(formattedAnnouncements));
         }
 
         // 11. Settings
@@ -352,25 +372,53 @@
             id: t.id,
             date: t.date,
             amount: Number(t.amount || 0),
-            member_id: t.memberId || null,
-            member_name: t.memberName || '',
+            member_name: t.giver || t.memberName || '',
             location: t.location || '',
-            notes: t.notes || '',
+            notes: t.note || t.notes || '',
             recorded_by: t.recordedBy || null
           }));
           await client.from('thanksgiving').upsert(payload);
         }
 
+        // Attendance
+        const attMap = readJson(STORES.attendance, {});
+        if (attMap && typeof attMap === 'object' && Object.keys(attMap).length) {
+          const payload = Object.entries(attMap).map(([key, records]) => ({
+            id: key,
+            service_date: key.split(' · ')[0] || '',
+            records: records
+          }));
+          await client.from('attendance').upsert(payload);
+        }
+
         // Ministers
         const ministers = readJson(STORES.ministers, []);
         if (ministers.length) {
-          await client.from('ministers').upsert(ministers);
+          const payload = ministers.map(m => ({
+            id: m.id,
+            name: m.name,
+            role: m.role || '',
+            bio: m.note || m.bio || '',
+            photo: m.photo || '',
+            display_order: Number(m.order ?? m.display_order) || 0
+          }));
+          await client.from('ministers').upsert(payload);
         }
 
         // Announcements
         const ann = readJson(STORES.announcements, []);
         if (ann.length) {
-          await client.from('announcements').upsert(ann);
+          const payload = ann.map(a => ({
+            id: a.id,
+            title: a.title,
+            content: a.content || '',
+            status: a.status || 'draft',
+            date: a.date || '',
+            sms_status: a.smsStatus || a.sms_status || 'not-sent',
+            sms_count: Number(a.smsCount ?? a.sms_count) || 0,
+            sms_at: a.smsAt || a.sms_at || null
+          }));
+          await client.from('announcements').upsert(payload);
         }
 
         // Settings
@@ -524,6 +572,54 @@
             recorded_by: o.recordedBy || null
           }));
           await client.from('offerings').upsert(payload);
+        });
+      } else if (key === STORES.thanksgiving && Array.isArray(parsed)) {
+        scheduleSync('thanksgiving', async () => {
+          const payload = parsed.map(t => ({
+            id: t.id,
+            date: t.date,
+            amount: Number(t.amount || 0),
+            member_name: t.giver || t.memberName || '',
+            location: t.location || '',
+            notes: t.note || t.notes || '',
+            recorded_by: t.recordedBy || null
+          }));
+          await client.from('thanksgiving').upsert(payload);
+        });
+      } else if (key === STORES.attendance && parsed && typeof parsed === 'object') {
+        scheduleSync('attendance', async () => {
+          const payload = Object.entries(parsed).map(([k, records]) => ({
+            id: k,
+            service_date: k.split(' · ')[0] || '',
+            records: records
+          }));
+          if (payload.length) await client.from('attendance').upsert(payload);
+        });
+      } else if (key === STORES.ministers && Array.isArray(parsed)) {
+        scheduleSync('ministers', async () => {
+          const payload = parsed.map(m => ({
+            id: m.id,
+            name: m.name,
+            role: m.role || '',
+            bio: m.note || m.bio || '',
+            photo: m.photo || '',
+            display_order: Number(m.order ?? m.display_order) || 0
+          }));
+          await client.from('ministers').upsert(payload);
+        });
+      } else if (key === STORES.announcements && Array.isArray(parsed)) {
+        scheduleSync('announcements', async () => {
+          const payload = parsed.map(a => ({
+            id: a.id,
+            title: a.title,
+            content: a.content || '',
+            status: a.status || 'draft',
+            date: a.date || '',
+            sms_status: a.smsStatus || a.sms_status || 'not-sent',
+            sms_count: Number(a.smsCount ?? a.sms_count) || 0,
+            sms_at: a.smsAt || a.sms_at || null
+          }));
+          await client.from('announcements').upsert(payload);
         });
       } else if (key === STORES.settings && parsed) {
         scheduleSync('settings', async () => {

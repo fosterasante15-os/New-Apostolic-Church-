@@ -279,7 +279,7 @@
         // Cloud sync to Supabase profiles if client is ready
         if (window.ChurchDB && window.ChurchDB.client) {
           try {
-            window.ChurchDB.client.from('profiles').update({ role: selectedRole, status: selectedStatus || 'Active' }).eq('email', email);
+            await window.ChurchDB.client.from('profiles').update({ role: selectedRole, status: selectedStatus || 'Active' }).eq('email', email);
           } catch (_) {}
         }
 
