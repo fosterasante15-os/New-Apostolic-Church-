@@ -105,7 +105,7 @@
           const dateCell = document.createElement('td'); dateCell.textContent = item.date || '—';
           const actionCell = document.createElement('td');
           const actionGroup = document.createElement('div'); actionGroup.className = 'row-actions';
-          actionGroup.append(makeButton('Edit', 'edit'), ...(item.status === 'published' ? [makeButton(item.smsStatus === 'sent' || item.smsStatus === 'demo' ? 'Resend SMS' : 'Send SMS', 'sms')] : []), makeButton('Delete', 'delete', 'delete'));
+          actionGroup.append(makeButton('Edit', 'edit'), ...(item.status === 'published' ? [makeButton(item.smsStatus === 'sent' || item.smsStatus === 'demo' ? 'Resend SMS' : 'Send SMS', 'sms'), makeButton('WhatsApp', 'wa')] : []), makeButton('Delete', 'delete', 'delete'));
           actionCell.append(actionGroup); tr.append(titleCell,statusCell,dateCell,actionCell);
           tr.dataset.announcementId = item.id; rows.append(tr);
         });
@@ -156,6 +156,18 @@
         if (!item) return;
         if (!adminOnly()) return;
         if (button.dataset.action === 'sms') { sendSms(item); return; }
+        if (button.dataset.action === 'wa') {
+          const church = (document.querySelector('[data-church-name]')?.textContent || 'New Apostolic Church Kumasi Central').trim();
+          const text = `📢 *${item.title}*\n\n${item.content || ''}\n\n📍 ${church}`;
+          if (navigator.share) {
+            navigator.share({ title: item.title, text }).catch(() => {
+              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+            });
+          } else {
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+          }
+          return;
+        }
         if (button.dataset.action === 'edit') openDialog(item);
         if (button.dataset.action === 'delete' && window.confirm(`Delete “${item.title}”?`)) {
           announcements = announcements.filter(entry => entry.id !== item.id);

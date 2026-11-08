@@ -212,7 +212,29 @@
         f('msg-to').textContent = to;
         f('msg-bubble').textContent = text;
         f('msg-sms').href = `sms:${to}?&body=${enc}`;
-        f('msg-wa').href = `https://wa.me/${to.replace('+', '')}?text=${enc}`;
+        const photoPreview = f('msg-photo-preview'), photoImg = f('msg-photo-img');
+        if (photoPreview && photoImg) {
+          if (member.photo) { photoImg.src = member.photo; photoPreview.style.display = 'block'; }
+          else { photoPreview.style.display = 'none'; }
+        }
+        const waLink = f('msg-wa');
+        waLink.href = `https://wa.me/${to.replace('+', '')}?text=${enc}`;
+        waLink.onclick = async (e) => {
+          if (navigator.share && member.photo) {
+            try {
+              const res = await fetch(member.photo);
+              const blob = await res.blob();
+              const file = new File([blob], `${member.id || 'member'}.jpg`, { type: blob.type || 'image/jpeg' });
+              if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                e.preventDefault();
+                await navigator.share({ title: `Welcome to ${churchName()}`, text, files: [file] });
+                return;
+              }
+            } catch (err) {
+              if (err.name === 'AbortError') { e.preventDefault(); return; }
+            }
+          }
+        };
         f('msg-copy').onclick = async () => { try { await navigator.clipboard.writeText(text); notify('Message copied.', 'success'); } catch (_) { notify('Could not copy automatically.', 'error'); } };
         status.className = 'msg-status';
         if (!NOTIFY_ENDPOINT) { status.textContent = 'Ready to send. Choose SMS or WhatsApp below (no SMS gateway is connected yet).'; logOutbox({ id: member.id, to, text, status: 'ready', at: new Date().toISOString() }); return; }
