@@ -174,5 +174,16 @@
           persist(); render(); notice.textContent = 'Announcement deleted.';
         }
       });
+      function reloadAnnouncements() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey));
+          if (Array.isArray(saved) && saved.length) {
+            announcements = saved;
+            render();
+          }
+        } catch (_) {}
+      }
+      window.addEventListener('announcements-change', reloadAnnouncements);
+      window.addEventListener('storage', e => { if (e.key === storageKey) reloadAnnouncements(); });
       render();
     })();

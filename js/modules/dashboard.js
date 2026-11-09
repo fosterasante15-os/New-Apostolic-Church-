@@ -13,10 +13,16 @@
         }
         return result;
       };
+      const defaultMembers = [
+        { id: 'NAC-0001', name: 'Member 001', department: 'Choir', joined: '2024-01-15', status: 'Active' },
+        { id: 'NAC-0002', name: 'Member 002', department: 'Sunday School', joined: '2023-08-04', status: 'Active' },
+        { id: 'NAC-0003', name: 'Member 003', department: "Men's Fellowship", joined: '2022-11-21', status: 'Active' }
+      ];
       function render() {
-        const members = Array.isArray(window.churchMembers) ? window.churchMembers : read('church-members-v1');
-        const services = Array.isArray(window.churchServices) ? window.churchServices : read('church-services-v1');
-        const ministers = Array.isArray(window.churchMinisters) ? window.churchMinisters : read('church-reconstruction-ministers-v1');
+        const rawMembers = Array.isArray(window.churchMembers) && window.churchMembers.length ? window.churchMembers : read('church-members-v1', null);
+        const members = Array.isArray(rawMembers) && rawMembers.length ? rawMembers : defaultMembers;
+        const services = Array.isArray(window.churchServices) && window.churchServices.length ? window.churchServices : read('church-services-v1', []);
+        const ministers = Array.isArray(window.churchMinisters) && window.churchMinisters.length ? window.churchMinisters : read('church-reconstruction-ministers-v1', []);
         const current = currentMonth(), active = members.filter(member => !member.status || member.status === 'Active').length;
         const newThisMonth = members.filter(member => monthKey(member.joined) === current).length;
         const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
@@ -56,6 +62,6 @@
           });
         }
       }
-      ['members-change', 'services-change', 'dues-change', 'ministers-change', 'church-profile-change'].forEach(event => window.addEventListener(event, render));
+      ['members-change', 'services-change', 'dues-change', 'ministers-change', 'church-profile-change', 'attendance-change', 'offerings-change'].forEach(event => window.addEventListener(event, render));
       render(); setTimeout(render, 0);
     })();

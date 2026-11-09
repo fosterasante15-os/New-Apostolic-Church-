@@ -101,5 +101,18 @@
 
       /* Member counts come from the members module. */
       window.addEventListener('members-change', e => { counts = {}; (e.detail || []).forEach(m => { window.memberDepartments(m).forEach(d => { counts[d] = (counts[d] || 0) + 1; }); }); render(); });
+      function reloadDepartments() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORE));
+          if (Array.isArray(saved) && saved.length) {
+            departments = saved;
+            window.churchDepartments = departments;
+            fillSelects();
+            render();
+          }
+        } catch (_) {}
+      }
+      window.addEventListener('departments-change', reloadDepartments);
+      window.addEventListener('storage', e => { if (e.key === STORE) reloadDepartments(); });
       fillSelects(); render(); onRoute();
     })();

@@ -78,6 +78,14 @@
       ['ministry-record-department', 'ministry-record-month', 'ministry-record-search'].forEach(id => f(id).addEventListener('input', render)); f('ministry-record-reset').addEventListener('click', () => { f('ministry-record-department').value = ''; f('ministry-record-month').value = ''; f('ministry-record-search').value = ''; render(); });
       f('ministry-due-rows').addEventListener('click', event => { const button = event.target.closest('button[data-action]'), due = dues.find(d => d.id === button?.closest('tr')?.dataset.dueId); if (!due) return; if (window.ChurchAccess?.canManageDue && !window.ChurchAccess.canManageDue(due)) return; if (button.dataset.action === 'edit') { showView('ministry'); prepare(due); const dialog = f('ministry-due-dialog'); if (dialog && !dialog.open) dialog.showModal(); } if (button.dataset.action === 'delete' && isAdmin() && window.confirm(`Delete the ministry due recorded for ${due.memberName}?`)) { dues = dues.filter(d => d.id !== due.id); persist(); render(); notify('Ministry due deleted.', 'success'); } });
       window.addEventListener('members-change', () => { fillMembers(); render(); }); window.addEventListener('departments-change', fillDepartments); window.addEventListener('department-renamed', e => { dues = dues.map(d => d.department === e.detail.from ? { ...d, department: e.detail.to } : d); persist(); fillDepartments(); });
+      function reloadMinistryDues() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORE) || '[]');
+          if (Array.isArray(saved)) { dues = saved; render(); }
+        } catch (_) {}
+      }
+      window.addEventListener('dues-change', reloadMinistryDues);
+      window.addEventListener('storage', e => { if (e.key === STORE) reloadMinistryDues(); });
       f('ministry-due-date').value = today(); f('ministry-due-month').value = monthNow(); fillDepartments(); showView('church');
     })();
 
@@ -118,6 +126,14 @@
       ['church-record-department', 'church-record-month', 'church-record-search'].forEach(id => f(id).addEventListener('input', render)); f('church-record-reset').addEventListener('click', () => { f('church-record-department').value = ''; f('church-record-month').value = ''; f('church-record-search').value = ''; render(); });
       f('church-due-rows').addEventListener('click', event => { const button = event.target.closest('button[data-action]'), due = dues.find(d => d.id === button?.closest('tr')?.dataset.dueId); if (!due) return; if (window.ChurchAccess?.canManageDue && !window.ChurchAccess.canManageDue(due)) return; if (button.dataset.action === 'edit') { editingId = due.id; f('church-due-error').textContent = ''; f('church-due-department').value = due.department || ''; fillMembers(); f('church-due-member').value = due.memberId; updateSummary(); f('church-due-amount').value = due.amount; f('church-due-date').value = due.paidOn; f('church-due-month').value = due.month; f('church-due-method').value = due.method; f('church-due-note').value = due.note || ''; const dialog = f('church-due-dialog'); if (dialog && !dialog.open) dialog.showModal(); f('church-due-amount').focus(); } if (button.dataset.action === 'delete' && isAdmin() && window.confirm(`Delete the church due recorded for ${due.memberName}?`)) { dues = dues.filter(d => d.id !== due.id); persist(); render(); notify('Church due deleted.', 'success'); } });
       window.addEventListener('members-change', () => { fillDepartments(); fillMembers(); render(); }); window.addEventListener('department-renamed', e => { dues = dues.map(d => d.department === e.detail.from ? { ...d, department: e.detail.to } : d); persist(); fillDepartments(); render(); });
+      function reloadChurchDues() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORE) || '[]');
+          if (Array.isArray(saved)) { dues = saved; render(); }
+        } catch (_) {}
+      }
+      window.addEventListener('dues-change', reloadChurchDues);
+      window.addEventListener('storage', e => { if (e.key === STORE) reloadChurchDues(); });
       f('church-due-date').value = today(); f('church-due-month').value = monthNow(); fillDepartments(); fillMembers(); render();
     })();
 

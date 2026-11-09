@@ -177,4 +177,14 @@
         try { localStorage.removeItem(storageKey); window.dispatchEvent(new CustomEvent('maintenance-change')); announce('All settings and the logo were restored to their defaults.', 'success', 'Settings reset', ['Church profile and logo','Session and security options','Backup and maintenance options']); }
         catch (_) { announce('Defaults restored for this session, but browser storage could not be cleared.', 'error', 'Reset incomplete'); }
       });
+
+      function reloadSettings() {
+        try {
+          const s = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          if (s && typeof s === 'object' && s.values) applySettings({ ...defaultSettings(), ...s.values }, s.logo || '');
+          applyProfile();
+        } catch (_) {}
+      }
+      window.addEventListener('church-profile-change', reloadSettings);
+      window.addEventListener('storage', e => { if (e.key === storageKey) reloadSettings(); });
     })();

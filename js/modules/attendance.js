@@ -90,6 +90,8 @@
       if (eventSel) eventSel.addEventListener('change', () => { loadDraft(); render(); syncCalendarToService(); });
       if (deptSel) deptSel.addEventListener('change', render);
       search.addEventListener('input', render);
-      window.addEventListener('members-change', render);
+      window.addEventListener('members-change', () => { loadDraft(); render(); });
+      window.addEventListener('attendance-change', () => { loadDraft(); render(); });
+      window.addEventListener('services-change', () => { loadDraft(); render(); syncCalendarToService(); });
       loadDraft(); render(); syncCalendarToService();
     })();

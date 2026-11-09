@@ -4,7 +4,13 @@
       const DEFAULTS = { description: 'Weekly worship service.', time: '09:00', venue: 'Main Auditorium' };
       const seedDates = ['2026-08-02','2026-08-09','2026-08-16','2026-08-23','2026-08-30','2026-09-06','2026-09-13','2026-09-20','2026-09-27','2026-10-04','2026-10-11','2026-10-18','2026-10-25'];
       let services = seedDates.map((date, i) => ({ id: `svc-seed-${i + 1}`, date, ...DEFAULTS }));
-      try { const saved = JSON.parse(localStorage.getItem(STORE)); if (Array.isArray(saved)) services = saved; } catch (_) {}
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORE));
+        if (Array.isArray(saved) && saved.length > 0) services = saved;
+        else if (!localStorage.getItem(STORE)) {
+          localStorage.setItem(STORE, JSON.stringify(services));
+        }
+      } catch (_) {}
       window.churchServices = services;
       let editingId = null, pendingEdit = null;
 
@@ -108,5 +114,17 @@
           services = services.filter(x => x.id !== v.id); persist(); render(); notice.textContent = `Sunday service on ${v.date} deleted.`;
         }
       });
+      function reloadServices() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORE));
+          if (Array.isArray(saved) && saved.length) {
+            services = saved;
+            window.churchServices = services;
+            render();
+          }
+        } catch (_) {}
+      }
+      window.addEventListener('services-change', reloadServices);
+      window.addEventListener('storage', e => { if (e.key === STORE) reloadServices(); });
       render(); onRoute();
     })();

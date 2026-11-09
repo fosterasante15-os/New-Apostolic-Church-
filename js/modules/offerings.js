@@ -99,5 +99,13 @@
         if (button.dataset.action === 'edit') { tEdit = rec.id; $('ot-t-error').textContent = ''; $('ot-t-date').value = rec.date; $('ot-t-amount').value = rec.amount; $('ot-t-giver').value = rec.giver || ''; $('ot-t-location').value = rec.location || ''; $('ot-t-note').value = rec.note || ''; $('ot-t-save').textContent = 'Update thanksgiving'; $('ot-t-cancel').hidden = false; $('ot-t-amount').focus(); }
         if (button.dataset.action === 'delete') { if (!isAdmin()) { notify('Only an admin can delete thanksgiving.', 'error', 'Admin access needed'); return; } if (window.confirm(`Delete the thanksgiving of ${money(rec.amount)} on ${prettyDate(rec.date)}?`)) { thanks = thanks.filter(r => r.id !== rec.id); if (tEdit === rec.id) resetThanks(); persist(); render(); notify('Thanksgiving deleted.', 'success'); } }
       });
+      function reloadOfferings() {
+        offerings = load(SK);
+        thanks = load(TK);
+        render();
+        dashboard();
+      }
+      window.addEventListener('offerings-change', reloadOfferings);
+      window.addEventListener('storage', e => { if (e.key === SK || e.key === TK) reloadOfferings(); });
       $('ot-month').value = shown; resetSunday(); resetThanks(); showTab('overview'); render();
     })();

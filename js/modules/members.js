@@ -7,7 +7,14 @@
         { id: 'NAC-0003', name: 'Member 003', email: 'member003@example.net', phone: '', dob: '', place: '', department: "Men's Fellowship", joined: '2022-11-21', status: 'Active' }
       ];
       let members = seed;
-      try { const saved = JSON.parse(localStorage.getItem(STORE)); if (Array.isArray(saved)) members = saved; } catch (_) {}
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORE));
+        if (Array.isArray(saved) && saved.length > 0) members = saved;
+        else if (!localStorage.getItem(STORE)) {
+          localStorage.setItem(STORE, JSON.stringify(seed));
+        }
+      } catch (_) {}
+      window.churchMembers = members;
 
       const f = id => document.getElementById(id);
       const rows = f('member-rows'), count = f('member-count'), notice = f('member-notice');
@@ -333,5 +340,17 @@
         }
       });
       commitId(format(Math.max(readSeq(), ...members.map(m => numberOf(m.id)))));
+      function reloadFromCloud() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORE));
+          if (Array.isArray(saved) && saved.length) {
+            members = saved;
+            window.churchMembers = members;
+            render();
+          }
+        } catch (_) {}
+      }
+      window.addEventListener('members-change', reloadFromCloud);
+      window.addEventListener('storage', e => { if (e.key === STORE) reloadFromCloud(); });
       render();
     })();

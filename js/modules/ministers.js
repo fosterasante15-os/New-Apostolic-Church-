@@ -8,8 +8,11 @@
       let ministers = seed;
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
-        if (Array.isArray(saved)) ministers = saved;
-      } catch (_) { /* Storage may be disabled; in-memory actions still work. */ }
+        if (Array.isArray(saved) && saved.length > 0) ministers = saved;
+        else if (!localStorage.getItem(storageKey)) {
+          localStorage.setItem(storageKey, JSON.stringify(ministers));
+        }
+      } catch (_) {}
       window.churchMinisters = ministers;
 
       const cards = document.getElementById('minister-cards');
@@ -156,5 +159,17 @@
           persist(); render(); notice.textContent = 'Minister deleted.';
         }
       });
+      function reloadMinisters() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey));
+          if (Array.isArray(saved) && saved.length) {
+            ministers = saved;
+            window.churchMinisters = ministers;
+            render();
+          }
+        } catch (_) {}
+      }
+      window.addEventListener('ministers-change', reloadMinisters);
+      window.addEventListener('storage', e => { if (e.key === storageKey) reloadMinisters(); });
       render();
     })();
