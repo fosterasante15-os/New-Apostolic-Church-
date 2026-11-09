@@ -1,18 +1,10 @@
 /* Members: every new member automatically receives a unique, never-reused Member ID (e.g. NAC-0004). */
     (() => {
       const STORE = 'church-members-v1', SEQ_STORE = 'church-member-seq-v1', PREFIX = 'NAC-', PAD = 4;
-      const seed = [
-        { id: 'NAC-0001', name: 'Member 001', email: 'member001@example.net', phone: '', dob: '', place: '', department: 'Choir', joined: '2024-01-15', status: 'Active' },
-        { id: 'NAC-0002', name: 'Member 002', email: 'member002@example.net', phone: '', dob: '', place: '', department: 'Sunday School', joined: '2023-08-04', status: 'Active' },
-        { id: 'NAC-0003', name: 'Member 003', email: 'member003@example.net', phone: '', dob: '', place: '', department: "Men's Fellowship", joined: '2022-11-21', status: 'Active' }
-      ];
-      let members = seed;
+      let members = [];
       try {
         const saved = JSON.parse(localStorage.getItem(STORE));
-        if (Array.isArray(saved) && saved.length > 0) members = saved;
-        else if (!localStorage.getItem(STORE)) {
-          localStorage.setItem(STORE, JSON.stringify(seed));
-        }
+        if (Array.isArray(saved)) members = saved;
       } catch (_) {}
       window.churchMembers = members;
 
@@ -336,14 +328,18 @@
         const m = members.find(x => x.id === btn.closest('tr')?.dataset.memberId); if (!m) return;
         if (btn.dataset.action === 'edit') { pendingEdit = m; location.hash = '#member-new'; }
         if (btn.dataset.action === 'delete' && window.confirm(`Delete ${m.name} (${m.id})? This ID will not be reused.`)) {
-          members = members.filter(x => x.id !== m.id); persist(); render(); notice.textContent = `Member ${m.id} deleted.`;
+          members = members.filter(x => x.id !== m.id);
+          persist();
+          render();
+          notice.textContent = `Member ${m.id} deleted.`;
+          window.ChurchDB?.deleteItem('members', m.id);
         }
       });
       commitId(format(Math.max(readSeq(), ...members.map(m => numberOf(m.id)))));
       function reloadFromCloud() {
         try {
           const saved = JSON.parse(localStorage.getItem(STORE));
-          if (Array.isArray(saved) && saved.length) {
+          if (Array.isArray(saved)) {
             members = saved;
             window.churchMembers = members;
             render();

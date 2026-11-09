@@ -13,12 +13,7 @@
       updateActiveNavigation();
 
       const storageKey = 'church-reconstruction-announcements-v1';
-      const seed = [
-        { id: 'seed-youth-retreat', title: 'Youth Retreat Registration', status: 'published', date: '2026-08-10' },
-        { id: 'seed-welcome-sunday', title: 'Welcome Sunday', status: 'published', date: '2026-08-01' },
-        { id: 'seed-easter-recap', title: 'Easter recap', status: 'archived', date: '2026-04-01' }
-      ];
-      let announcements = seed;
+      let announcements = [];
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
         if (Array.isArray(saved)) announcements = saved;
@@ -171,13 +166,16 @@
         if (button.dataset.action === 'edit') openDialog(item);
         if (button.dataset.action === 'delete' && window.confirm(`Delete “${item.title}”?`)) {
           announcements = announcements.filter(entry => entry.id !== item.id);
-          persist(); render(); notice.textContent = 'Announcement deleted.';
+          persist();
+          render();
+          notice.textContent = 'Announcement deleted.';
+          window.ChurchDB?.deleteItem('announcements', item.id);
         }
       });
       function reloadAnnouncements() {
         try {
           const saved = JSON.parse(localStorage.getItem(storageKey));
-          if (Array.isArray(saved) && saved.length) {
+          if (Array.isArray(saved)) {
             announcements = saved;
             render();
           }

@@ -76,6 +76,33 @@
     },
 
     // ----------------------------------------------------
+    // DELETIONS & TOMBSTONES
+    // ----------------------------------------------------
+    async deleteItem(table, id) {
+      if (!id) return false;
+      try {
+        const tombstones = readJson('church-tombstones-v1', {});
+        tombstones[table] = tombstones[table] || [];
+        if (!tombstones[table].includes(id)) {
+          tombstones[table].push(id);
+          rawSetItem('church-tombstones-v1', JSON.stringify(tombstones));
+        }
+      } catch (_) {}
+
+      if (client) {
+        try {
+          const { error } = await client.from(table).delete().eq('id', id);
+          if (error) console.warn(`[Supabase Delete Warning] ${table} (${id}):`, error.message);
+          return !error;
+        } catch (err) {
+          console.warn(`[Supabase Delete Error] ${table} (${id}):`, err);
+          return false;
+        }
+      }
+      return true;
+    },
+
+    // ----------------------------------------------------
     // TEST CONNECTION
     // ----------------------------------------------------
     async testConnection() {
@@ -124,15 +151,19 @@
           client.from('profiles').select('*').order('created_at', { ascending: false })
         ]);
 
-        // 1. MEMBERS (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.members, []);
-          const cloud = (mRes.status === 'fulfilled' && !mRes.value.error && Array.isArray(mRes.value.data)) ? mRes.value.data : [];
-          const map = new Map();
-          local.forEach(m => { if (m && m.id) map.set(m.id, m); });
-          cloud.forEach(m => {
-            if (m && m.id) {
-              map.set(m.id, {
+        const tombstones = readJson('church-tombstones-v1', {});
+
+        // 1. MEMBERS
+        if (mRes.status === 'fulfilled' && !mRes.value.error && Array.isArray(mRes.value.data)) {
+          const tSet = new Set(tombstones.members || []);
+          const toDelete = [];
+          const clean = [];
+          mRes.value.data.forEach(m => {
+            if (!m || !m.id) return;
+            if (tSet.has(m.id)) {
+              toDelete.push(m.id);
+            } else {
+              clean.push({
                 id: m.id,
                 name: m.name,
                 email: m.email || '',
@@ -147,78 +178,75 @@
               });
             }
           });
-          const merged = [...map.values()];
-          if (merged.length > 0) {
-            rawSetItem(STORES.members, JSON.stringify(merged));
-            window.churchMembers = merged;
+          if (toDelete.length > 0) {
+            client.from('members').delete().in('id', toDelete).catch(() => {});
           }
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            const payload = missing.map(m => ({
-              id: m.id,
-              name: m.name,
-              email: m.email || '',
-              phone: m.phone || '',
-              dob: m.dob || '',
-              place: m.place || '',
-              department: m.department || '',
-              departments: Array.isArray(m.departments) ? m.departments : [],
-              joined: m.joined || '',
-              status: m.status || 'Active',
-              photo: m.photo || ''
-            }));
-            client.from('members').upsert(payload).catch(e => console.warn('[Auto-reconcile members]', e));
-          }
+          rawSetItem(STORES.members, JSON.stringify(clean));
+          window.churchMembers = clean;
         }
 
-        // 2. DEPARTMENTS (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.departments, []);
-          const cloud = (dRes.status === 'fulfilled' && !dRes.value.error && Array.isArray(dRes.value.data)) ? dRes.value.data : [];
-          const map = new Map();
-          local.forEach(d => { if (d && (d.id || d.name)) map.set(d.id || d.name, d); });
-          cloud.forEach(d => { if (d && (d.id || d.name)) map.set(d.id || d.name, d); });
-          const merged = [...map.values()];
-          if (merged.length > 0) {
-            rawSetItem(STORES.departments, JSON.stringify(merged));
-            window.churchDepartments = merged;
+        // 2. DEPARTMENTS
+        if (dRes.status === 'fulfilled' && !dRes.value.error && Array.isArray(dRes.value.data)) {
+          const tSet = new Set(tombstones.departments || []);
+          const toDelete = [];
+          const clean = [];
+          dRes.value.data.forEach(d => {
+            if (!d || !(d.id || d.name)) return;
+            const key = d.id || d.name;
+            if (tSet.has(key)) {
+              toDelete.push(key);
+            } else {
+              clean.push({
+                id: d.id,
+                name: d.name,
+                description: d.description || ''
+              });
+            }
+          });
+          if (toDelete.length > 0) {
+            client.from('departments').delete().in('id', toDelete).catch(() => {});
           }
-          const cloudIds = new Set(cloud.map(c => c.id || c.name));
-          const missing = local.filter(l => l && !cloudIds.has(l.id || l.name));
-          if (missing.length > 0) {
-            client.from('departments').upsert(missing).catch(e => console.warn('[Auto-reconcile departments]', e));
-          }
+          rawSetItem(STORES.departments, JSON.stringify(clean));
+          window.churchDepartments = clean;
         }
 
-        // 3. SERVICES (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.services, []);
-          const cloud = (sRes.status === 'fulfilled' && !sRes.value.error && Array.isArray(sRes.value.data)) ? sRes.value.data : [];
-          const map = new Map();
-          local.forEach(s => { if (s && s.id) map.set(s.id, s); });
-          cloud.forEach(s => { if (s && s.id) map.set(s.id, s); });
-          const merged = [...map.values()];
-          if (merged.length > 0) {
-            rawSetItem(STORES.services, JSON.stringify(merged));
-            window.churchServices = merged;
+        // 3. SERVICES
+        if (sRes.status === 'fulfilled' && !sRes.value.error && Array.isArray(sRes.value.data)) {
+          const tSet = new Set(tombstones.services || []);
+          const toDelete = [];
+          const clean = [];
+          sRes.value.data.forEach(s => {
+            if (!s || !s.id) return;
+            if (tSet.has(s.id)) {
+              toDelete.push(s.id);
+            } else {
+              clean.push({
+                id: s.id,
+                date: s.date,
+                time: s.time || '09:00',
+                venue: s.venue || 'Main Auditorium',
+                description: s.description || ''
+              });
+            }
+          });
+          if (toDelete.length > 0) {
+            client.from('services').delete().in('id', toDelete).catch(() => {});
           }
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            client.from('services').upsert(missing).catch(e => console.warn('[Auto-reconcile services]', e));
-          }
+          rawSetItem(STORES.services, JSON.stringify(clean));
+          window.churchServices = clean;
         }
 
-        // 4. CHURCH GENERAL DUES (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.churchDues, []);
-          const cloud = (cdRes.status === 'fulfilled' && !cdRes.value.error && Array.isArray(cdRes.value.data)) ? cdRes.value.data : [];
-          const map = new Map();
-          local.forEach(d => { if (d && d.id) map.set(d.id, d); });
-          cloud.forEach(d => {
-            if (d && d.id) {
-              map.set(d.id, {
+        // 4. CHURCH GENERAL DUES
+        if (cdRes.status === 'fulfilled' && !cdRes.value.error && Array.isArray(cdRes.value.data)) {
+          const tSet = new Set(tombstones.church_dues || []);
+          const toDelete = [];
+          const clean = [];
+          cdRes.value.data.forEach(d => {
+            if (!d || !d.id) return;
+            if (tSet.has(d.id)) {
+              toDelete.push(d.id);
+            } else {
+              clean.push({
                 id: d.id,
                 memberId: d.member_id,
                 memberName: d.member_name,
@@ -232,36 +260,23 @@
               });
             }
           });
-          const merged = [...map.values()];
-          if (merged.length > 0) rawSetItem(STORES.churchDues, JSON.stringify(merged));
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            const payload = missing.map(d => ({
-              id: d.id,
-              member_id: d.memberId || null,
-              member_name: d.memberName || '',
-              department: d.department || 'General',
-              amount: Number(d.amount || 0),
-              month: d.month || '',
-              paid_on: d.paidOn || '',
-              method: d.method || 'Cash',
-              txn_id: d.txnId || '',
-              recorded_by: d.recordedBy || null
-            }));
-            client.from('church_dues').upsert(payload).catch(e => console.warn('[Auto-reconcile church_dues]', e));
+          if (toDelete.length > 0) {
+            client.from('church_dues').delete().in('id', toDelete).catch(() => {});
           }
+          rawSetItem(STORES.churchDues, JSON.stringify(clean));
         }
 
-        // 5. MINISTRY DUES (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.ministryDues, []);
-          const cloud = (mdRes.status === 'fulfilled' && !mdRes.value.error && Array.isArray(mdRes.value.data)) ? mdRes.value.data : [];
-          const map = new Map();
-          local.forEach(d => { if (d && d.id) map.set(d.id, d); });
-          cloud.forEach(d => {
-            if (d && d.id) {
-              map.set(d.id, {
+        // 5. MINISTRY DUES
+        if (mdRes.status === 'fulfilled' && !mdRes.value.error && Array.isArray(mdRes.value.data)) {
+          const tSet = new Set(tombstones.ministry_dues || []);
+          const toDelete = [];
+          const clean = [];
+          mdRes.value.data.forEach(d => {
+            if (!d || !d.id) return;
+            if (tSet.has(d.id)) {
+              toDelete.push(d.id);
+            } else {
+              clean.push({
                 id: d.id,
                 memberId: d.member_id,
                 memberName: d.member_name,
@@ -275,71 +290,50 @@
               });
             }
           });
-          const merged = [...map.values()];
-          if (merged.length > 0) rawSetItem(STORES.ministryDues, JSON.stringify(merged));
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            const payload = missing.map(d => ({
-              id: d.id,
-              member_id: d.memberId || null,
-              member_name: d.memberName || '',
-              department: d.department || '',
-              amount: Number(d.amount || 0),
-              month: d.month || '',
-              paid_on: d.paidOn || '',
-              method: d.method || 'Cash',
-              txn_id: d.txnId || '',
-              recorded_by: d.recordedBy || null
-            }));
-            client.from('ministry_dues').upsert(payload).catch(e => console.warn('[Auto-reconcile ministry_dues]', e));
+          if (toDelete.length > 0) {
+            client.from('ministry_dues').delete().in('id', toDelete).catch(() => {});
           }
+          rawSetItem(STORES.ministryDues, JSON.stringify(clean));
         }
 
-        // 6. OFFERINGS (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.offerings, []);
-          const cloud = (oRes.status === 'fulfilled' && !oRes.value.error && Array.isArray(oRes.value.data)) ? oRes.value.data : [];
-          const map = new Map();
-          local.forEach(o => { if (o && o.id) map.set(o.id, o); });
-          cloud.forEach(o => {
-            if (o && o.id) {
-              map.set(o.id, {
+        // 6. OFFERINGS
+        if (oRes.status === 'fulfilled' && !oRes.value.error && Array.isArray(oRes.value.data)) {
+          const tSet = new Set(tombstones.offerings || []);
+          const toDelete = [];
+          const clean = [];
+          oRes.value.data.forEach(o => {
+            if (!o || !o.id) return;
+            if (tSet.has(o.id)) {
+              toDelete.push(o.id);
+            } else {
+              clean.push({
                 id: o.id,
                 date: o.date,
                 amount: Number(o.amount || 0),
                 serviceId: o.service_id,
-                notes: o.notes,
+                notes: o.notes || '',
+                note: o.notes || '',
                 recordedBy: o.recorded_by
               });
             }
           });
-          const merged = [...map.values()];
-          if (merged.length > 0) rawSetItem(STORES.offerings, JSON.stringify(merged));
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            const payload = missing.map(o => ({
-              id: o.id,
-              date: o.date,
-              amount: Number(o.amount || 0),
-              service_id: o.serviceId || null,
-              notes: o.notes || '',
-              recorded_by: o.recordedBy || null
-            }));
-            client.from('offerings').upsert(payload).catch(e => console.warn('[Auto-reconcile offerings]', e));
+          if (toDelete.length > 0) {
+            client.from('offerings').delete().in('id', toDelete).catch(() => {});
           }
+          rawSetItem(STORES.offerings, JSON.stringify(clean));
         }
 
-        // 7. THANKSGIVING (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.thanksgiving, []);
-          const cloud = (tRes.status === 'fulfilled' && !tRes.value.error && Array.isArray(tRes.value.data)) ? tRes.value.data : [];
-          const map = new Map();
-          local.forEach(t => { if (t && t.id) map.set(t.id, t); });
-          cloud.forEach(t => {
-            if (t && t.id) {
-              map.set(t.id, {
+        // 7. THANKSGIVING
+        if (tRes.status === 'fulfilled' && !tRes.value.error && Array.isArray(tRes.value.data)) {
+          const tSet = new Set(tombstones.thanksgiving || []);
+          const toDelete = [];
+          const clean = [];
+          tRes.value.data.forEach(t => {
+            if (!t || !t.id) return;
+            if (tSet.has(t.id)) {
+              toDelete.push(t.id);
+            } else {
+              clean.push({
                 id: t.id,
                 date: t.date,
                 amount: Number(t.amount || 0),
@@ -352,54 +346,35 @@
               });
             }
           });
-          const merged = [...map.values()];
-          if (merged.length > 0) rawSetItem(STORES.thanksgiving, JSON.stringify(merged));
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            const payload = missing.map(t => ({
-              id: t.id,
-              date: t.date,
-              amount: Number(t.amount || 0),
-              member_name: t.giver || t.memberName || '',
-              location: t.location || '',
-              notes: t.note || t.notes || '',
-              recorded_by: t.recordedBy || null
-            }));
-            client.from('thanksgiving').upsert(payload).catch(e => console.warn('[Auto-reconcile thanksgiving]', e));
+          if (toDelete.length > 0) {
+            client.from('thanksgiving').delete().in('id', toDelete).catch(() => {});
           }
+          rawSetItem(STORES.thanksgiving, JSON.stringify(clean));
         }
 
-        // 8. ATTENDANCE (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.attendance, {});
-          const cloud = (aRes.status === 'fulfilled' && !aRes.value.error && Array.isArray(aRes.value.data)) ? aRes.value.data : [];
-          const merged = { ...local };
-          cloud.forEach(row => {
-            if (row && row.id && row.records) merged[row.id] = row.records;
+        // 8. ATTENDANCE
+        if (aRes.status === 'fulfilled' && !aRes.value.error && Array.isArray(aRes.value.data)) {
+          const tSet = new Set(tombstones.attendance || []);
+          const merged = {};
+          aRes.value.data.forEach(row => {
+            if (row && row.id && !tSet.has(row.id)) {
+              merged[row.id] = row.records || {};
+            }
           });
           rawSetItem(STORES.attendance, JSON.stringify(merged));
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missingEntries = Object.entries(local).filter(([k]) => !cloudIds.has(k));
-          if (missingEntries.length > 0) {
-            const payload = missingEntries.map(([k, records]) => ({
-              id: k,
-              service_date: k.split(' · ')[0] || '',
-              records: records
-            }));
-            client.from('attendance').upsert(payload).catch(e => console.warn('[Auto-reconcile attendance]', e));
-          }
         }
 
-        // 9. MINISTERS (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.ministers, []);
-          const cloud = (minRes.status === 'fulfilled' && !minRes.value.error && Array.isArray(minRes.value.data)) ? minRes.value.data : [];
-          const map = new Map();
-          local.forEach(m => { if (m && m.id) map.set(m.id, m); });
-          cloud.forEach(m => {
-            if (m && m.id) {
-              map.set(m.id, {
+        // 9. MINISTERS
+        if (minRes.status === 'fulfilled' && !minRes.value.error && Array.isArray(minRes.value.data)) {
+          const tSet = new Set(tombstones.ministers || []);
+          const toDelete = [];
+          const clean = [];
+          minRes.value.data.forEach(m => {
+            if (!m || !m.id) return;
+            if (tSet.has(m.id)) {
+              toDelete.push(m.id);
+            } else {
+              clean.push({
                 id: m.id,
                 name: m.name,
                 role: m.role || '',
@@ -409,35 +384,24 @@
               });
             }
           });
-          const merged = [...map.values()];
-          if (merged.length > 0) {
-            rawSetItem(STORES.ministers, JSON.stringify(merged));
-            window.churchMinisters = merged;
+          if (toDelete.length > 0) {
+            client.from('ministers').delete().in('id', toDelete).catch(() => {});
           }
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            const payload = missing.map(m => ({
-              id: m.id,
-              name: m.name,
-              role: m.role || '',
-              bio: m.note || m.bio || '',
-              photo: m.photo || '',
-              display_order: Number(m.order ?? m.display_order) || 0
-            }));
-            client.from('ministers').upsert(payload).catch(e => console.warn('[Auto-reconcile ministers]', e));
-          }
+          rawSetItem(STORES.ministers, JSON.stringify(clean));
+          window.churchMinisters = clean;
         }
 
-        // 10. ANNOUNCEMENTS (Reconcile Cloud + Local)
-        {
-          const local = readJson(STORES.announcements, []);
-          const cloud = (annRes.status === 'fulfilled' && !annRes.value.error && Array.isArray(annRes.value.data)) ? annRes.value.data : [];
-          const map = new Map();
-          local.forEach(a => { if (a && a.id) map.set(a.id, a); });
-          cloud.forEach(a => {
-            if (a && a.id) {
-              map.set(a.id, {
+        // 10. ANNOUNCEMENTS
+        if (annRes.status === 'fulfilled' && !annRes.value.error && Array.isArray(annRes.value.data)) {
+          const tSet = new Set(tombstones.announcements || []);
+          const toDelete = [];
+          const clean = [];
+          annRes.value.data.forEach(a => {
+            if (!a || !a.id) return;
+            if (tSet.has(a.id)) {
+              toDelete.push(a.id);
+            } else {
+              clean.push({
                 id: a.id,
                 title: a.title,
                 content: a.content || '',
@@ -449,36 +413,24 @@
               });
             }
           });
-          const merged = [...map.values()];
-          if (merged.length > 0) rawSetItem(STORES.announcements, JSON.stringify(merged));
-          const cloudIds = new Set(cloud.map(c => c.id));
-          const missing = local.filter(l => l && l.id && !cloudIds.has(l.id));
-          if (missing.length > 0) {
-            const payload = missing.map(a => ({
-              id: a.id,
-              title: a.title,
-              content: a.content || '',
-              status: a.status || 'draft',
-              date: a.date || '',
-              sms_status: a.smsStatus || a.sms_status || 'not-sent',
-              sms_count: Number(a.smsCount ?? a.sms_count) || 0,
-              sms_at: a.smsAt || a.sms_at || null
-            }));
-            client.from('announcements').upsert(payload).catch(e => console.warn('[Auto-reconcile announcements]', e));
+          if (toDelete.length > 0) {
+            client.from('announcements').delete().in('id', toDelete).catch(() => {});
           }
+          rawSetItem(STORES.announcements, JSON.stringify(clean));
         }
 
-        // 11. SETTINGS (Reconcile Cloud + Local)
+        // 11. SETTINGS
         if (setRes.status === 'fulfilled' && !setRes.value.error && setRes.value.data && setRes.value.data.value) {
           rawSetItem(STORES.settings, JSON.stringify(setRes.value.data.value));
         }
 
-        // 12. PROFILES / USERS (Reconcile Cloud + Local)
-        {
+        // 12. PROFILES / USERS
+        if (pRes.status === 'fulfilled' && !pRes.value.error && Array.isArray(pRes.value.data)) {
           const localUsers = readJson(STORES.users, []);
-          const cloudUsers = (pRes.status === 'fulfilled' && !pRes.value.error && Array.isArray(pRes.value.data)) ? pRes.value.data : [];
           const existingMap = new Map(localUsers.map(u => [String(u.email).toLowerCase(), u]));
-          cloudUsers.forEach(p => {
+          const tSet = new Set(tombstones.profiles || []);
+          pRes.value.data.forEach(p => {
+            if (!p || tSet.has(p.id) || tSet.has(p.email)) return;
             const emailKey = String(p.email || '').toLowerCase();
             const existing = existingMap.get(emailKey);
             existingMap.set(emailKey, {
@@ -491,8 +443,7 @@
               isCloud: true
             });
           });
-          const merged = [...existingMap.values()];
-          if (merged.length > 0) rawSetItem(STORES.users, JSON.stringify(merged));
+          rawSetItem(STORES.users, JSON.stringify([...existingMap.values()]));
         }
 
         this.isConnected = true;
@@ -566,9 +517,12 @@
     // Check if key is one of our synchronized data stores
     try {
       const parsed = JSON.parse(value);
+      const tombstones = readJson('church-tombstones-v1', {});
+
       if (key === STORES.members && Array.isArray(parsed)) {
         scheduleSync('members', async () => {
-          const payload = parsed.map(m => ({
+          const tSet = new Set(tombstones.members || []);
+          const payload = parsed.filter(m => m && m.id && !tSet.has(m.id)).map(m => ({
             id: m.id,
             name: m.name,
             email: m.email || '',
@@ -581,19 +535,24 @@
             status: m.status || 'Active',
             photo: m.photo || ''
           }));
-          await client.from('members').upsert(payload);
+          if (payload.length > 0) await client.from('members').upsert(payload);
         });
       } else if (key === STORES.departments && Array.isArray(parsed)) {
         scheduleSync('departments', async () => {
-          await client.from('departments').upsert(parsed);
+          const tSet = new Set(tombstones.departments || []);
+          const payload = parsed.filter(d => d && !tSet.has(d.id) && !tSet.has(d.name));
+          if (payload.length > 0) await client.from('departments').upsert(payload);
         });
       } else if (key === STORES.services && Array.isArray(parsed)) {
         scheduleSync('services', async () => {
-          await client.from('services').upsert(parsed);
+          const tSet = new Set(tombstones.services || []);
+          const payload = parsed.filter(s => s && s.id && !tSet.has(s.id));
+          if (payload.length > 0) await client.from('services').upsert(payload);
         });
       } else if (key === STORES.churchDues && Array.isArray(parsed)) {
         scheduleSync('church_dues', async () => {
-          const payload = parsed.map(d => ({
+          const tSet = new Set(tombstones.church_dues || []);
+          const payload = parsed.filter(d => d && d.id && !tSet.has(d.id)).map(d => ({
             id: d.id,
             member_id: d.memberId || null,
             member_name: d.memberName || '',
@@ -605,11 +564,12 @@
             txn_id: d.txnId || '',
             recorded_by: d.recordedBy || null
           }));
-          await client.from('church_dues').upsert(payload);
+          if (payload.length > 0) await client.from('church_dues').upsert(payload);
         });
       } else if (key === STORES.ministryDues && Array.isArray(parsed)) {
         scheduleSync('ministry_dues', async () => {
-          const payload = parsed.map(d => ({
+          const tSet = new Set(tombstones.ministry_dues || []);
+          const payload = parsed.filter(d => d && d.id && !tSet.has(d.id)).map(d => ({
             id: d.id,
             member_id: d.memberId || null,
             member_name: d.memberName || '',
@@ -621,11 +581,12 @@
             txn_id: d.txnId || '',
             recorded_by: d.recordedBy || null
           }));
-          await client.from('ministry_dues').upsert(payload);
+          if (payload.length > 0) await client.from('ministry_dues').upsert(payload);
         });
       } else if (key === STORES.offerings && Array.isArray(parsed)) {
         scheduleSync('offerings', async () => {
-          const payload = parsed.map(o => ({
+          const tSet = new Set(tombstones.offerings || []);
+          const payload = parsed.filter(o => o && o.id && !tSet.has(o.id)).map(o => ({
             id: o.id,
             date: o.date,
             amount: Number(o.amount || 0),
@@ -633,11 +594,12 @@
             notes: o.notes || '',
             recorded_by: o.recordedBy || null
           }));
-          await client.from('offerings').upsert(payload);
+          if (payload.length > 0) await client.from('offerings').upsert(payload);
         });
       } else if (key === STORES.thanksgiving && Array.isArray(parsed)) {
         scheduleSync('thanksgiving', async () => {
-          const payload = parsed.map(t => ({
+          const tSet = new Set(tombstones.thanksgiving || []);
+          const payload = parsed.filter(t => t && t.id && !tSet.has(t.id)).map(t => ({
             id: t.id,
             date: t.date,
             amount: Number(t.amount || 0),
@@ -646,11 +608,12 @@
             notes: t.note || t.notes || '',
             recorded_by: t.recordedBy || null
           }));
-          await client.from('thanksgiving').upsert(payload);
+          if (payload.length > 0) await client.from('thanksgiving').upsert(payload);
         });
       } else if (key === STORES.attendance && parsed && typeof parsed === 'object') {
         scheduleSync('attendance', async () => {
-          const payload = Object.entries(parsed).map(([k, records]) => ({
+          const tSet = new Set(tombstones.attendance || []);
+          const payload = Object.entries(parsed).filter(([k]) => !tSet.has(k)).map(([k, records]) => ({
             id: k,
             service_date: k.split(' · ')[0] || '',
             records: records
@@ -659,7 +622,8 @@
         });
       } else if (key === STORES.ministers && Array.isArray(parsed)) {
         scheduleSync('ministers', async () => {
-          const payload = parsed.map(m => ({
+          const tSet = new Set(tombstones.ministers || []);
+          const payload = parsed.filter(m => m && m.id && !tSet.has(m.id)).map(m => ({
             id: m.id,
             name: m.name,
             role: m.role || '',
@@ -667,11 +631,12 @@
             photo: m.photo || '',
             display_order: Number(m.order ?? m.display_order) || 0
           }));
-          await client.from('ministers').upsert(payload);
+          if (payload.length > 0) await client.from('ministers').upsert(payload);
         });
       } else if (key === STORES.announcements && Array.isArray(parsed)) {
         scheduleSync('announcements', async () => {
-          const payload = parsed.map(a => ({
+          const tSet = new Set(tombstones.announcements || []);
+          const payload = parsed.filter(a => a && a.id && !tSet.has(a.id)).map(a => ({
             id: a.id,
             title: a.title,
             content: a.content || '',
@@ -681,7 +646,7 @@
             sms_count: Number(a.smsCount ?? a.sms_count) || 0,
             sms_at: a.smsAt || a.sms_at || null
           }));
-          await client.from('announcements').upsert(payload);
+          if (payload.length > 0) await client.from('announcements').upsert(payload);
         });
       } else if (key === STORES.settings && parsed) {
         scheduleSync('settings', async () => {
@@ -693,14 +658,15 @@
         });
       } else if (key === STORES.users && Array.isArray(parsed)) {
         scheduleSync('profiles', async () => {
-          const payload = parsed.map(u => ({
+          const tSet = new Set(tombstones.profiles || []);
+          const payload = parsed.filter(u => u && !tSet.has(String(u.id)) && !tSet.has(u.email)).map(u => ({
             id: String(u.id),
             email: u.email,
             name: u.name || u.email.split('@')[0],
             role: u.role || 'member',
             status: u.status || 'Active'
           }));
-          await client.from('profiles').upsert(payload);
+          if (payload.length > 0) await client.from('profiles').upsert(payload);
         });
       }
     } catch (_) {}

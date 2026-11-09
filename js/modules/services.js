@@ -2,14 +2,10 @@
     (() => {
       const STORE = 'church-services-v1';
       const DEFAULTS = { description: 'Weekly worship service.', time: '09:00', venue: 'Main Auditorium' };
-      const seedDates = ['2026-08-02','2026-08-09','2026-08-16','2026-08-23','2026-08-30','2026-09-06','2026-09-13','2026-09-20','2026-09-27','2026-10-04','2026-10-11','2026-10-18','2026-10-25'];
-      let services = seedDates.map((date, i) => ({ id: `svc-seed-${i + 1}`, date, ...DEFAULTS }));
+      let services = [];
       try {
         const saved = JSON.parse(localStorage.getItem(STORE));
-        if (Array.isArray(saved) && saved.length > 0) services = saved;
-        else if (!localStorage.getItem(STORE)) {
-          localStorage.setItem(STORE, JSON.stringify(services));
-        }
+        if (Array.isArray(saved)) services = saved;
       } catch (_) {}
       window.churchServices = services;
       let editingId = null, pendingEdit = null;
@@ -111,13 +107,17 @@
         const v = services.find(x => x.id === btn.closest('tr')?.dataset.serviceId); if (!v) return;
         if (btn.dataset.action === 'edit') { pendingEdit = v; location.hash = '#service-new'; }
         if (btn.dataset.action === 'delete' && window.confirm(`Delete the Sunday service on ${v.date} at ${v.time}?`)) {
-          services = services.filter(x => x.id !== v.id); persist(); render(); notice.textContent = `Sunday service on ${v.date} deleted.`;
+          services = services.filter(x => x.id !== v.id);
+          persist();
+          render();
+          notice.textContent = `Sunday service on ${v.date} deleted.`;
+          window.ChurchDB?.deleteItem('services', v.id);
         }
       });
       function reloadServices() {
         try {
           const saved = JSON.parse(localStorage.getItem(STORE));
-          if (Array.isArray(saved) && saved.length) {
+          if (Array.isArray(saved)) {
             services = saved;
             window.churchServices = services;
             render();

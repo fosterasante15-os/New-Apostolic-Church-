@@ -1,17 +1,9 @@
 (() => {
       const storageKey = 'church-reconstruction-ministers-v1';
-      const seed = [
-        { id: 'seed-minister-001', order: 1, name: 'Minister 001', role: 'Congregational Rector', note: 'Leads worship and pastoral care for the congregation.', photo: '' },
-        { id: 'seed-minister-002', order: 2, name: 'Minister 002', role: "Women's Fellowship Leader", note: 'Supports the women of the congregation and helps coordinate fellowship gatherings.', photo: '' },
-        { id: 'seed-minister-003', order: 3, name: 'Minister 003', role: "Men's Fellowship Leader", note: 'Serves the men of the church and assists with Sunday service arrangements.', photo: '' }
-      ];
-      let ministers = seed;
+      let ministers = [];
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
-        if (Array.isArray(saved) && saved.length > 0) ministers = saved;
-        else if (!localStorage.getItem(storageKey)) {
-          localStorage.setItem(storageKey, JSON.stringify(ministers));
-        }
+        if (Array.isArray(saved)) ministers = saved;
       } catch (_) {}
       window.churchMinisters = ministers;
 
@@ -156,13 +148,16 @@
         if (action.dataset.action === 'edit') openDialog(minister);
         if (action.dataset.action === 'delete' && window.confirm(`Delete ${minister.name}?`)) {
           ministers = ministers.filter(item => item.id !== minister.id);
-          persist(); render(); notice.textContent = 'Minister deleted.';
+          persist();
+          render();
+          notice.textContent = 'Minister deleted.';
+          window.ChurchDB?.deleteItem('ministers', minister.id);
         }
       });
       function reloadMinisters() {
         try {
           const saved = JSON.parse(localStorage.getItem(storageKey));
-          if (Array.isArray(saved) && saved.length) {
+          if (Array.isArray(saved)) {
             ministers = saved;
             window.churchMinisters = ministers;
             render();

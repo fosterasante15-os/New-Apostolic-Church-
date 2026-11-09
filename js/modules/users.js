@@ -356,6 +356,7 @@
         } catch (_) {}
         logActivity({ action: 'user-registration-declined', userId: user.id, userName: user.email.split('@')[0], summary: `Main Admin declined registration for ${user.email}`, data: { email: user.email } });
         persist(); render();
+        window.ChurchDB?.deleteItem('profiles', user.id);
         window.notify?.(`Registration request for ${user.email} declined.`, 'info', 'Registration Declined');
       }
     }
@@ -364,6 +365,7 @@
     if (button.dataset.action === 'delete' && !user.current && window.confirm(`Delete local user entry ${user.email}? This does not change or revoke any real account.`)) {
       users = users.filter(entry => entry.id !== user.id);
       persist(); render(); notice.textContent = 'User entry deleted from this browser.';
+      window.ChurchDB?.deleteItem('profiles', user.id);
     }
   });
 

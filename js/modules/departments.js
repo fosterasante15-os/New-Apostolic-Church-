@@ -95,7 +95,12 @@
         const n = counts[d.name] || 0;
         if (n > 0) { notify(`“${d.name}” still has ${n} ${n === 1 ? 'member' : 'members'}. Move them to another department first.`, 'error', 'Cannot delete'); return; }
         if (window.confirm(`Delete the department “${d.name}”?`)) {
-          departments = departments.filter(x => x.id !== d.id); persist(); fillSelects(); render(); notice.textContent = `Department “${d.name}” deleted.`;
+          departments = departments.filter(x => x.id !== d.id);
+          persist();
+          fillSelects();
+          render();
+          notice.textContent = `Department “${d.name}” deleted.`;
+          window.ChurchDB?.deleteItem('departments', d.id || d.name);
         }
       });
 
@@ -104,7 +109,7 @@
       function reloadDepartments() {
         try {
           const saved = JSON.parse(localStorage.getItem(STORE));
-          if (Array.isArray(saved) && saved.length) {
+          if (Array.isArray(saved)) {
             departments = saved;
             window.churchDepartments = departments;
             fillSelects();
