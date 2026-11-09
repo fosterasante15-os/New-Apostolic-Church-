@@ -372,6 +372,7 @@
     .shell, .topbar { position:relative; z-index:1; }
     .sidebar { position:relative; z-index:3; }
     .mobile-nav-toggle { display:none; }
+    .sidebar-backdrop { display:none; }
     .toast-stack { position:fixed; right:22px; bottom:22px; z-index:90; display:grid; gap:10px; width:min(400px,calc(100% - 44px)); pointer-events:none; }
     .toast { position:relative; display:grid; grid-template-columns:auto 1fr auto; align-items:start; gap:11px; padding:13px 12px 15px 14px; overflow:hidden; border:1px solid #c9e2e8; border-left:4px solid var(--toast-accent,#1f8aa6); border-radius:11px; color:#164c61; background:#fff; box-shadow:0 14px 38px rgba(18,61,85,.2); opacity:0; transform:translateX(28px); transition:opacity .25s ease, transform .25s ease; pointer-events:auto; }
     .toast.is-visible { opacity:1; transform:translateX(0); }
@@ -428,6 +429,7 @@
         display: block !important;
         position: relative;
         min-height: 100vh;
+        z-index: auto !important;
       }
       .sidebar {
         position: fixed !important;
@@ -448,13 +450,22 @@
       body.nav-open .sidebar {
         transform: translateX(0) !important;
       }
-      body.nav-open::after {
-        position: fixed;
-        inset: 0;
-        z-index: 999;
-        content: "";
+      .sidebar-backdrop {
+        display: block !important;
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 998 !important;
         background: rgba(13, 35, 47, 0.52);
-        backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease;
+      }
+      body.nav-open .sidebar-backdrop {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+      body.nav-open {
+        overflow: hidden;
       }
       .workspace { width: 100% !important; min-width: 0 !important; flex: none !important; }
       .topbar {
@@ -462,6 +473,8 @@
         justify-content: space-between !important;
         gap: 8px !important;
         padding: 10px 14px !important;
+        backdrop-filter: none !important;
+        background: rgba(255, 255, 255, 0.96) !important;
       }
       .topbar .greeting {
         flex: 1;
@@ -472,11 +485,7 @@
         font-size: 13.5px;
       }
       .topbar-actions { gap: 6px !important; }
-      .supabase-pill {
-        font-size: 11px !important;
-        padding: 4px 8px !important;
-        margin-right: 0 !important;
-      }
+
       main {
         padding: 18px 12px 48px !important;
         width: 100% !important;
@@ -879,7 +888,8 @@ html[data-theme="dark"] .toast { box-shadow:0 12px 36px rgba(0,0,0,.5); }
 :where(html[data-theme="dark"]) .image-tile figcaption{color:#fff;background:rgba(18,61,85,.72)}
 @media (max-width:680px) {
 :where(html[data-theme="dark"]) .mobile-nav-toggle{border:1px solid #364045;background:#12191c;color:#c0d2dd}
-:where(html[data-theme="dark"]) body.nav-open:after{background:rgba(13,35,47,.35)}
+:where(html[data-theme="dark"]) .sidebar-backdrop{background:rgba(13,35,47,.65)}
+:where(html[data-theme="dark"]) .topbar{background:rgba(22,28,31,.96) !important}
 }
 :where(html[data-theme="dark"]) .settings-dialog{border:0;color:#b2dcec;background:#12191c}
 :where(html[data-theme="dark"]) .settings-dialog::backdrop{background:rgba(16,40,52,.45)}

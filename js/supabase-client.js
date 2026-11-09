@@ -99,10 +99,27 @@
       if (!client || this.isSyncing) return false;
       this.isSyncing = true;
       try {
+        // Parallel fetch of all cloud tables for high-performance loading
+        const [
+          mRes, dRes, sRes, cdRes, mdRes, oRes, tRes, aRes, minRes, annRes, setRes, pRes
+        ] = await Promise.allSettled([
+          client.from('members').select('*').order('id', { ascending: true }),
+          client.from('departments').select('*').order('name', { ascending: true }),
+          client.from('services').select('*').order('date', { ascending: true }),
+          client.from('church_dues').select('*').order('created_at', { ascending: false }),
+          client.from('ministry_dues').select('*').order('created_at', { ascending: false }),
+          client.from('offerings').select('*').order('date', { ascending: false }),
+          client.from('thanksgiving').select('*').order('date', { ascending: false }),
+          client.from('attendance').select('*'),
+          client.from('ministers').select('*').order('display_order', { ascending: true }),
+          client.from('announcements').select('*').order('created_at', { ascending: false }),
+          client.from('church_settings').select('*').eq('key', 'general').maybeSingle(),
+          client.from('profiles').select('*').order('created_at', { ascending: false })
+        ]);
+
         // 1. Members
-        const { data: members, error: mErr } = await client.from('members').select('*').order('id', { ascending: true });
-        if (!mErr && Array.isArray(members) && members.length > 0) {
-          const formatted = members.map(m => ({
+        if (mRes.status === 'fulfilled' && !mRes.value.error && Array.isArray(mRes.value.data) && mRes.value.data.length > 0) {
+          const formatted = mRes.value.data.map(m => ({
             id: m.id,
             name: m.name,
             email: m.email || '',
@@ -120,23 +137,20 @@
         }
 
         // 2. Departments
-        const { data: depts, error: dErr } = await client.from('departments').select('*').order('name', { ascending: true });
-        if (!dErr && Array.isArray(depts) && depts.length > 0) {
-          rawSetItem(STORES.departments, JSON.stringify(depts));
-          window.churchDepartments = depts;
+        if (dRes.status === 'fulfilled' && !dRes.value.error && Array.isArray(dRes.value.data) && dRes.value.data.length > 0) {
+          rawSetItem(STORES.departments, JSON.stringify(dRes.value.data));
+          window.churchDepartments = dRes.value.data;
         }
 
         // 3. Services
-        const { data: services, error: sErr } = await client.from('services').select('*').order('date', { ascending: true });
-        if (!sErr && Array.isArray(services) && services.length > 0) {
-          rawSetItem(STORES.services, JSON.stringify(services));
-          window.churchServices = services;
+        if (sRes.status === 'fulfilled' && !sRes.value.error && Array.isArray(sRes.value.data) && sRes.value.data.length > 0) {
+          rawSetItem(STORES.services, JSON.stringify(sRes.value.data));
+          window.churchServices = sRes.value.data;
         }
 
         // 4. Church General Dues
-        const { data: cDues, error: cdErr } = await client.from('church_dues').select('*').order('created_at', { ascending: false });
-        if (!cdErr && Array.isArray(cDues)) {
-          const list = cDues.map(d => ({
+        if (cdRes.status === 'fulfilled' && !cdRes.value.error && Array.isArray(cdRes.value.data)) {
+          const list = cdRes.value.data.map(d => ({
             id: d.id,
             memberId: d.member_id,
             memberName: d.member_name,
@@ -152,9 +166,8 @@
         }
 
         // 5. Ministry Dues
-        const { data: mDues, error: mdErr } = await client.from('ministry_dues').select('*').order('created_at', { ascending: false });
-        if (!mdErr && Array.isArray(mDues)) {
-          const list = mDues.map(d => ({
+        if (mdRes.status === 'fulfilled' && !mdRes.value.error && Array.isArray(mdRes.value.data)) {
+          const list = mdRes.value.data.map(d => ({
             id: d.id,
             memberId: d.member_id,
             memberName: d.member_name,
@@ -170,9 +183,8 @@
         }
 
         // 6. Offerings
-        const { data: offerings, error: oErr } = await client.from('offerings').select('*').order('date', { ascending: false });
-        if (!oErr && Array.isArray(offerings)) {
-          const list = offerings.map(o => ({
+        if (oRes.status === 'fulfilled' && !oRes.value.error && Array.isArray(oRes.value.data)) {
+          const list = oRes.value.data.map(o => ({
             id: o.id,
             date: o.date,
             amount: Number(o.amount || 0),
@@ -184,9 +196,8 @@
         }
 
         // 7. Thanksgiving
-        const { data: thanks, error: tErr } = await client.from('thanksgiving').select('*').order('date', { ascending: false });
-        if (!tErr && Array.isArray(thanks)) {
-          const list = thanks.map(t => ({
+        if (tRes.status === 'fulfilled' && !tRes.value.error && Array.isArray(tRes.value.data)) {
+          const list = tRes.value.data.map(t => ({
             id: t.id,
             date: t.date,
             amount: Number(t.amount || 0),
@@ -201,19 +212,17 @@
         }
 
         // 8. Attendance
-        const { data: attendance, error: aErr } = await client.from('attendance').select('*');
-        if (!aErr && Array.isArray(attendance)) {
+        if (aRes.status === 'fulfilled' && !aRes.value.error && Array.isArray(aRes.value.data)) {
           const map = {};
-          attendance.forEach(row => {
+          aRes.value.data.forEach(row => {
             if (row.id && row.records) map[row.id] = row.records;
           });
           if (Object.keys(map).length > 0) rawSetItem(STORES.attendance, JSON.stringify(map));
         }
 
         // 9. Ministers
-        const { data: ministers, error: minErr } = await client.from('ministers').select('*').order('display_order', { ascending: true });
-        if (!minErr && Array.isArray(ministers) && ministers.length > 0) {
-          const formattedMinisters = ministers.map(m => ({
+        if (minRes.status === 'fulfilled' && !minRes.value.error && Array.isArray(minRes.value.data) && minRes.value.data.length > 0) {
+          const formattedMinisters = minRes.value.data.map(m => ({
             id: m.id,
             name: m.name,
             role: m.role || '',
@@ -226,9 +235,8 @@
         }
 
         // 10. Announcements
-        const { data: announcements, error: annErr } = await client.from('announcements').select('*').order('created_at', { ascending: false });
-        if (!annErr && Array.isArray(announcements) && announcements.length > 0) {
-          const formattedAnnouncements = announcements.map(a => ({
+        if (annRes.status === 'fulfilled' && !annRes.value.error && Array.isArray(annRes.value.data) && annRes.value.data.length > 0) {
+          const formattedAnnouncements = annRes.value.data.map(a => ({
             id: a.id,
             title: a.title,
             content: a.content || '',
@@ -242,18 +250,16 @@
         }
 
         // 11. Settings
-        const { data: settingsRow, error: setErr } = await client.from('church_settings').select('*').eq('key', 'general').maybeSingle();
-        if (!setErr && settingsRow && settingsRow.value) {
-          rawSetItem(STORES.settings, JSON.stringify(settingsRow.value));
+        if (setRes.status === 'fulfilled' && !setRes.value.error && setRes.value.data && setRes.value.data.value) {
+          rawSetItem(STORES.settings, JSON.stringify(setRes.value.data.value));
         }
 
         // 12. Profiles / User Accounts
-        const { data: profiles, error: pErr } = await client.from('profiles').select('*').order('created_at', { ascending: false });
-        if (!pErr && Array.isArray(profiles) && profiles.length > 0) {
+        if (pRes.status === 'fulfilled' && !pRes.value.error && Array.isArray(pRes.value.data) && pRes.value.data.length > 0) {
           const localUsers = readJson(STORES.users, []);
           const existingMap = new Map((Array.isArray(localUsers) ? localUsers : []).map(u => [String(u.email).toLowerCase(), u]));
 
-          profiles.forEach(p => {
+          pRes.value.data.forEach(p => {
             const emailKey = String(p.email || '').toLowerCase();
             const existing = existingMap.get(emailKey);
             existingMap.set(emailKey, {
@@ -278,15 +284,17 @@
           window.notify('Downloaded latest data from Supabase cloud.', 'success', 'Cloud Synchronized');
         }
 
-        // Trigger UI event re-renders
+        // Trigger UI event re-renders in batch
+        window.dispatchEvent(new CustomEvent('members-change'));
         window.dispatchEvent(new CustomEvent('departments-change'));
         window.dispatchEvent(new CustomEvent('services-change'));
         window.dispatchEvent(new CustomEvent('dues-change'));
         window.dispatchEvent(new CustomEvent('offerings-change'));
+        window.dispatchEvent(new CustomEvent('ministers-change'));
+        window.dispatchEvent(new CustomEvent('announcements-change'));
         return true;
       } catch (err) {
         console.warn('[Supabase Sync Error]', err);
-        this.updateStatusBadge('error');
         return false;
       } finally {
         this.isSyncing = false;
@@ -482,36 +490,10 @@
     // ----------------------------------------------------
     // UI STATUS PILL
     // ----------------------------------------------------
+    // Supabase Status Pill removed from navigation bar per user requirement
     updateStatusBadge(status) {
-      let pill = document.getElementById('supabase-status-pill');
-      if (!pill) {
-        const topbar = document.querySelector('.topbar-actions') || document.querySelector('.topbar');
-        if (!topbar) return;
-        pill = document.createElement('div');
-        pill.id = 'supabase-status-pill';
-        pill.className = 'supabase-pill';
-        pill.addEventListener('click', () => {
-          if (this.isConnected) {
-            window.notify && window.notify('Connected to Supabase PostgreSQL: nsccmfevvkvjhvxrtmax.supabase.co', 'info', 'Cloud Database Active');
-          } else {
-            alert('Supabase Connection Notice:\n\nIf you see this warning, run the "supabase-schema.sql" file in your Supabase SQL Editor to initialize all cloud database tables.');
-          }
-        });
-        topbar.prepend(pill);
-      }
-
-      if (status === 'connected') {
-        pill.innerHTML = '<span class="status-dot green"></span> Supabase Cloud';
-        pill.title = 'Connected to Supabase PostgreSQL database';
-        pill.className = 'supabase-pill is-connected';
-      } else if (status === 'error') {
-        pill.innerHTML = '<span class="status-dot red"></span> Setup Cloud Tables';
-        pill.title = 'Click for setup instructions. Schema needs to be run in Supabase SQL editor.';
-        pill.className = 'supabase-pill is-warning';
-      } else {
-        pill.innerHTML = '<span class="status-dot amber"></span> Connecting...';
-        pill.className = 'supabase-pill';
-      }
+      const pill = document.getElementById('supabase-status-pill');
+      if (pill) pill.remove();
     }
   };
 
@@ -683,56 +665,14 @@
     } catch (_) {}
   };
 
-  // Inject Styles for the Supabase Cloud badge
-  const style = document.createElement('style');
-  style.textContent = `
-    .supabase-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #244153;
-      background: #eef6f9;
-      border: 1px solid #d0e4ed;
-      cursor: pointer;
-      user-select: none;
-      transition: all .2s ease;
-      margin-right: 8px;
-    }
-    .supabase-pill:hover {
-      background: #e1f0f5;
-    }
-    .supabase-pill .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .status-dot.green { background: #12b76a; box-shadow: 0 0 0 3px rgba(18,183,106,.2); }
-    .status-dot.red { background: #f04438; box-shadow: 0 0 0 3px rgba(240,68,56,.2); }
-    .status-dot.amber { background: #f79009; }
-    html[data-theme="dark"] .supabase-pill {
-      background: #172c36;
-      border-color: #2b4957;
-      color: #c9e2ee;
-    }
-  `;
-  document.head.appendChild(style);
-
   // Initialize on page load
   document.addEventListener('DOMContentLoaded', async () => {
-    DB.updateStatusBadge('connecting');
     const test = await DB.testConnection();
     if (test.ok) {
-      DB.updateStatusBadge('connected');
-      // Pull latest changes from cloud
+      // Pull latest changes from cloud asynchronously
       await DB.pullAllFromCloud(true);
     } else {
       console.warn('[Supabase Setup Required]', test.error);
-      DB.updateStatusBadge('error');
     }
   });
 

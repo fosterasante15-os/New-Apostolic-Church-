@@ -28,8 +28,17 @@
     } catch (_) {}
   }
 
-  let signedIn = null; try { signedIn = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch (_) {}
-  if (signedIn && signedIn.role && !params.has('loggedout')) { location.replace(HOME); return; }
+  const AUTH_ROLES = ['admin', 'main-admin', 'account'];
+  let signedIn = null;
+  try { signedIn = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch (_) {}
+  const hasValidRole = signedIn && typeof signedIn === 'object' && AUTH_ROLES.includes(String(signedIn.role || '').toLowerCase());
+  if (hasValidRole && !params.has('loggedout')) {
+    location.replace(HOME);
+    return;
+  }
+  if (signedIn && !hasValidRole) {
+    try { sessionStorage.removeItem(AUTH_KEY); } catch (_) {}
+  }
   if (params.has('loggedout')) message('You have been logged out.', true);
 
   /* The login identity always uses the church logo; the Settings logo is for the administration workspace. */
