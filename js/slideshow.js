@@ -46,6 +46,12 @@
       const navToggle = document.getElementById('mobile-nav-toggle');
       navToggle?.addEventListener('click', () => { const open = document.body.classList.toggle('nav-open'); navToggle.setAttribute('aria-expanded', String(open)); });
       document.querySelectorAll('.nav a').forEach(link => link.addEventListener('click', () => { document.body.classList.remove('nav-open'); navToggle?.setAttribute('aria-expanded','false'); }));
+      document.addEventListener('click', e => {
+        if (document.body.classList.contains('nav-open') && !e.target.closest('.sidebar') && !e.target.closest('#mobile-nav-toggle')) {
+          document.body.classList.remove('nav-open');
+          navToggle?.setAttribute('aria-expanded', 'false');
+        }
+      });
       const logoutDialog = document.getElementById('logout-dialog');
       const closeLogoutDialog = () => { if (logoutDialog?.open) logoutDialog.close(); };
       document.getElementById('logout-button')?.addEventListener('click', () => { if (logoutDialog?.showModal) logoutDialog.showModal(); });

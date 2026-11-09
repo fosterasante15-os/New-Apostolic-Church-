@@ -223,7 +223,16 @@
 
         if (window.ChurchDB && window.ChurchDB.client) {
           try {
-            await window.ChurchDB.signUp(email, pw, { name: fullName, role: 'member', status: 'Pending' });
+            const authRes = await window.ChurchDB.signUp(email, pw, { name: fullName, role: 'member', status: 'Pending' });
+            const cloudId = authRes?.user?.id || newId;
+            await window.ChurchDB.client.from('profiles').upsert({
+              id: String(cloudId),
+              email: email,
+              name: fullName,
+              role: 'member',
+              status: 'Pending',
+              created_at: new Date().toISOString()
+            });
           } catch (cloudErr) {
             console.log('[Supabase Cloud sync]', cloudErr.message);
           }

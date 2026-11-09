@@ -376,5 +376,12 @@
     }
   });
 
+  window.addEventListener('users-change', () => {
+    try {
+      const val = JSON.parse(localStorage.getItem(storageKey));
+      if (Array.isArray(val)) { users = val; render(); }
+    } catch (_) {}
+  });
+
   render();
 })();

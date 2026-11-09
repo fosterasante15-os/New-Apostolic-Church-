@@ -30,7 +30,8 @@
     ministers: 'church-reconstruction-ministers-v1',
     announcements: 'church-reconstruction-announcements-v1',
     settings: 'church-reconstruction-settings-v1',
-    activity: 'church-activity-v1'
+    activity: 'church-activity-v1',
+    users: 'church-reconstruction-users-v1'
   };
 
   const DB = {
@@ -246,6 +247,31 @@
           rawSetItem(STORES.settings, JSON.stringify(settingsRow.value));
         }
 
+        // 12. Profiles / User Accounts
+        const { data: profiles, error: pErr } = await client.from('profiles').select('*').order('created_at', { ascending: false });
+        if (!pErr && Array.isArray(profiles) && profiles.length > 0) {
+          const localUsers = readJson(STORES.users, []);
+          const existingMap = new Map((Array.isArray(localUsers) ? localUsers : []).map(u => [String(u.email).toLowerCase(), u]));
+
+          profiles.forEach(p => {
+            const emailKey = String(p.email || '').toLowerCase();
+            const existing = existingMap.get(emailKey);
+            existingMap.set(emailKey, {
+              id: p.id,
+              email: p.email,
+              name: p.name || existing?.name || p.email.split('@')[0],
+              role: p.role || existing?.role || 'member',
+              status: p.status || existing?.status || 'Pending',
+              lastLogin: p.last_login || existing?.lastLogin || '—',
+              isCloud: true
+            });
+          });
+
+          const merged = [...existingMap.values()];
+          rawSetItem(STORES.users, JSON.stringify(merged));
+          window.dispatchEvent(new CustomEvent('users-change'));
+        }
+
         this.isConnected = true;
         this.updateStatusBadge('connected');
         if (!silent && window.notify) {
@@ -429,6 +455,19 @@
             value: settings,
             updated_at: new Date().toISOString()
           });
+        }
+
+        // User Accounts / Profiles
+        const allUsers = readJson(STORES.users, []);
+        if (allUsers.length) {
+          const payload = allUsers.map(u => ({
+            id: String(u.id),
+            email: u.email,
+            name: u.name || u.email.split('@')[0],
+            role: u.role || 'member',
+            status: u.status || 'Active'
+          }));
+          await client.from('profiles').upsert(payload);
         }
 
         window.notify && window.notify('All local records uploaded to Supabase successfully!', 'success', 'Upload Complete');
@@ -628,6 +667,17 @@
             value: parsed,
             updated_at: new Date().toISOString()
           });
+        });
+      } else if (key === STORES.users && Array.isArray(parsed)) {
+        scheduleSync('profiles', async () => {
+          const payload = parsed.map(u => ({
+            id: String(u.id),
+            email: u.email,
+            name: u.name || u.email.split('@')[0],
+            role: u.role || 'member',
+            status: u.status || 'Active'
+          }));
+          await client.from('profiles').upsert(payload);
         });
       }
     } catch (_) {}

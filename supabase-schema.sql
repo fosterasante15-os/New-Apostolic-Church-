@@ -20,15 +20,40 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 
 -- 1. Profiles (Linked to Supabase Auth users)
 CREATE TABLE public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL,
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
   name TEXT,
-  role TEXT DEFAULT 'admin' CHECK (role IN ('main-admin', 'admin', 'account', 'member')),
-  status TEXT DEFAULT 'Active',
+  role TEXT DEFAULT 'member' CHECK (role IN ('main-admin', 'admin', 'account', 'member')),
+  status TEXT DEFAULT 'Pending' CHECK (status IN ('Active', 'Pending', 'Inactive', 'Locked', 'Blocked')),
   photo_url TEXT,
   last_login TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Trigger to automatically populate public.profiles when a user registers
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name, role, status)
+  VALUES (
+    new.id::text,
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    COALESCE(new.raw_user_meta_data->>'role', 'member'),
+    COALESCE(new.raw_user_meta_data->>'status', 'Pending')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = COALESCE(EXCLUDED.name, public.profiles.name),
+    role = COALESCE(EXCLUDED.role, public.profiles.role),
+    status = COALESCE(EXCLUDED.status, public.profiles.status);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- 2. Departments
 CREATE TABLE public.departments (
