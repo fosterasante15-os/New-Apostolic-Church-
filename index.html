@@ -3,68 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>New Apostolic Church Kumasi Central — Management System</title>
-  <meta name="description" content="Official church management portal for New Apostolic Church Kumasi Central, Ghana. Cloud-synchronized members, dues, offerings, attendance, and services.">
-
-  <!-- Open Graph / WhatsApp / Facebook Social Preview -->
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://newapostolicchurch.vercel.app/">
-  <meta property="og:site_name" content="New Apostolic Church Kumasi Central">
-  <meta property="og:title" content="New Apostolic Church Kumasi Central — Management System">
-  <meta property="og:description" content="Official church management portal for New Apostolic Church Kumasi Central, Ghana. Cloud-synchronized members, dues, offerings, attendance, and services.">
-  <meta property="og:image" content="https://newapostolicchurch.vercel.app/church-preview.jpg">
-  <meta property="og:image:secure_url" content="https://newapostolicchurch.vercel.app/church-preview.jpg">
-  <meta property="og:image:type" content="image/jpeg">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="800">
-  <meta property="og:image:alt" content="New Apostolic Church Kumasi Central building and sanctuary">
-
-  <!-- Twitter / X Card Preview -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="https://newapostolicchurch.vercel.app/">
-  <meta name="twitter:title" content="New Apostolic Church Kumasi Central — Management System">
-  <meta name="twitter:description" content="Official church management portal for New Apostolic Church Kumasi Central, Ghana. Cloud-synchronized members, dues, offerings, attendance, and services.">
-  <meta name="twitter:image" content="https://newapostolicchurch.vercel.app/church-preview.jpg">
-  <link rel="image_src" href="https://newapostolicchurch.vercel.app/church-preview.jpg">
-  <link rel="preconnect" href="https://nsccmfevvkvjhvxrtmax.supabase.co" crossorigin>
-  <link rel="dns-prefetch" href="https://nsccmfevvkvjhvxrtmax.supabase.co">
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <title>Church Management — Dashboard</title>
   <link rel="stylesheet" href="css/styles.css">
-  <style id="auth-guard-style">html { display: none !important; }</style>
   <script>
     /* Theme is applied before first paint so the page never flashes the wrong colours. */
-    (function () {
-      try {
-        var t = localStorage.getItem('church-theme-v1');
-        document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
-      } catch (_) {
-        document.documentElement.setAttribute('data-theme', 'light');
-      }
-    })();
-    /* Authentication guard: prevents dashboard flash for unauthorized or unauthenticated visits */
-    (function () {
-      try {
-        var s = JSON.parse(sessionStorage.getItem('church-auth-v1') || 'null');
-        var rawExp = s && (s.expiresAt || s.expires_at);
-        var expMs = rawExp ? (typeof rawExp === 'number' ? (rawExp < 1e12 ? rawExp * 1000 : rawExp) : Date.parse(rawExp)) : NaN;
-        var expired = !Number.isNaN(expMs) && expMs <= Date.now();
-        if (s && typeof s === 'object' && !expired && ['admin', 'main-admin', 'account'].includes(String(s.role || '').toLowerCase())) {
-          var g = document.getElementById('auth-guard-style');
-          if (g && g.parentNode) g.parentNode.removeChild(g);
-          return;
-        }
-        if (expired) sessionStorage.removeItem('church-auth-v1');
-      } catch (_) {}
-      location.replace('login.html?from=index.html');
-    })();
+    (function () { try { var t = localStorage.getItem('church-theme-v1'); document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); } catch (_) { document.documentElement.setAttribute('data-theme', 'light'); } })();
   </script>
 </head>
 <body>
   <div class="site-backdrop" aria-hidden="true">
-    <img src="img/entrance.webp" alt="" fetchpriority="high" decoding="async" data-backdrop-image>
-    <img src="img/sanctuary.webp" alt="" loading="lazy" decoding="async" data-backdrop-image>
-    <img src="img/choir.jpg" alt="" loading="lazy" decoding="async" data-backdrop-image>
+    <img src="img/entrance.webp" alt="" data-backdrop-image>
+    <img src="img/sanctuary.webp" alt="" data-backdrop-image>
+    <img src="img/choir.jpg" alt="" data-backdrop-image>
   </div>
   <div class="shell">
     <aside class="sidebar" aria-label="Main navigation">
@@ -85,7 +35,6 @@
         <a href="#settings"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</a>
       </nav>
     </aside>
-    <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
 
     <div class="workspace">
       <header class="topbar"><button class="mobile-nav-toggle" id="mobile-nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false">☰</button><span class="greeting" id="user-greeting">Church Management System</span><div class="topbar-actions"><button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
@@ -102,9 +51,9 @@
         <section class="screen" id="dashboard" aria-label="Dashboard">
           
           <section class="hero-banner" aria-roledescription="carousel" aria-label="Church photos">
-            <figure class="hero-slide"><img src="img/entrance.webp" alt="Church entrance" fetchpriority="high" decoding="async"><figcaption data-church-name>New Apostolic Church Kumasi Central</figcaption></figure>
-            <figure class="hero-slide"><img src="img/sanctuary.webp" alt="Church sanctuary" loading="lazy" decoding="async"><figcaption data-church-name>New Apostolic Church Kumasi Central</figcaption></figure>
-            <figure class="hero-slide"><img src="img/choir.jpg" alt="Church choir" loading="lazy" decoding="async"><figcaption data-church-name>New Apostolic Church Kumasi Central</figcaption></figure>
+            <figure class="hero-slide"><img src="img/entrance.webp" alt="Church entrance"><figcaption data-church-name>New Apostolic Church Kumasi Central</figcaption></figure>
+            <figure class="hero-slide"><img src="img/sanctuary.webp" alt="Church sanctuary"><figcaption data-church-name>New Apostolic Church Kumasi Central</figcaption></figure>
+            <figure class="hero-slide"><img src="img/choir.jpg" alt="Church choir"><figcaption data-church-name>New Apostolic Church Kumasi Central</figcaption></figure>
             <div class="hero-dots" role="group" aria-label="Choose photo"></div>
           </section>
 
@@ -785,7 +734,6 @@
     <div class="settings-dialog-body"><div class="settings-dialog-icon" aria-hidden="true">✓</div><h3 id="member-success-title">Member registered</h3><p id="member-success-text" style="margin:0;color:var(--muted);font-size:14px"></p><span class="member-id" id="member-success-id" style="font-size:22px;padding:8px 18px"></span>
       <div class="msg-card" id="msg-card" hidden>
         <div class="msg-card-head"><strong>Welcome message</strong><span class="msg-to" id="msg-to"></span></div>
-        <div class="msg-photo-preview" id="msg-photo-preview" style="display:none;margin:8px 0;text-align:center"><img id="msg-photo-img" style="max-height:110px;border-radius:6px;border:1px solid var(--border);" alt="Member photo"></div>
         <p class="msg-bubble" id="msg-bubble"></p>
         <p class="msg-status" id="msg-status" role="status" aria-live="polite"></p>
         <div class="msg-actions"><a class="plain-button" id="msg-sms" href="#">Send as SMS</a><a class="plain-button" id="msg-wa" href="#" target="_blank" rel="noopener noreferrer">Send on WhatsApp</a><button class="plain-button" id="msg-copy" type="button">Copy message</button></div>
@@ -805,31 +753,31 @@
     </form>
   </dialog>
   <!-- Supabase Cloud SDK & Data Client -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="js/supabase-client.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
+  <script src="js/supabase-client.js"></script>
 
   <!-- Core Security & Infrastructure -->
-  <script defer src="js/access.js"></script>
-  <script defer src="js/notifications.js"></script>
-  <script defer src="js/slideshow.js"></script>
+  <script src="js/access.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/slideshow.js"></script>
 
   <!-- Business Modules -->
-  <script defer src="js/modules/departments.js"></script>
-  <script defer src="js/modules/services.js"></script>
-  <script defer src="js/modules/members.js"></script>
-  <script defer src="js/modules/momo.js"></script>
-  <script defer src="js/modules/dues.js"></script>
-  <script defer src="js/modules/offerings.js"></script>
-  <script defer src="js/modules/attendance.js"></script>
-  <script defer src="js/modules/ministers.js"></script>
-  <script defer src="js/modules/announcements.js"></script>
-  <script defer src="js/modules/users.js"></script>
-  <script defer src="js/modules/activity.js"></script>
-  <script defer src="js/modules/reports.js"></script>
-  <script defer src="js/modules/settings.js"></script>
-  <script defer src="js/modules/dashboard.js"></script>
+  <script src="js/modules/departments.js"></script>
+  <script src="js/modules/services.js"></script>
+  <script src="js/modules/members.js"></script>
+  <script src="js/modules/momo.js"></script>
+  <script src="js/modules/dues.js"></script>
+  <script src="js/modules/offerings.js"></script>
+  <script src="js/modules/attendance.js"></script>
+  <script src="js/modules/ministers.js"></script>
+  <script src="js/modules/announcements.js"></script>
+  <script src="js/modules/users.js"></script>
+  <script src="js/modules/activity.js"></script>
+  <script src="js/modules/reports.js"></script>
+  <script src="js/modules/settings.js"></script>
+  <script src="js/modules/dashboard.js"></script>
 
   <!-- UI Components (Profile, Account, Theme Toggle) -->
-  <script defer src="js/ui.js"></script>
+  <script src="js/ui.js"></script>
 </body>
 </html>
