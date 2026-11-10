@@ -139,39 +139,19 @@
     // ----------------------------------------------------
     // UI STATUS PILL
     // ----------------------------------------------------
-    updateStatusBadge(status) {
-      let pill = document.getElementById('supabase-status-pill');
-      if (!pill) {
-        const topbar = document.querySelector('.topbar-actions') || document.querySelector('.topbar');
-        if (!topbar) return;
-        pill = document.createElement('div');
-        pill.id = 'supabase-status-pill';
-        pill.className = 'supabase-pill';
-        pill.addEventListener('click', () => {
-          if (this.isConnected) {
-            window.notify && window.notify('Connected to Supabase PostgreSQL: nsccmfevvkvjhvxrtmax.supabase.co', 'info', 'Cloud Database Active');
-          } else {
-            alert('Supabase Connection Notice:\n\nIf you see this warning, run the "supabase-schema.sql" file in your Supabase SQL Editor to initialize all cloud database tables.');
-          }
-        });
-        topbar.prepend(pill);
-      }
-
-      if (status === 'connected') {
-        pill.innerHTML = '<span class="status-dot green"></span> Supabase Cloud';
-        pill.title = 'Connected to Supabase PostgreSQL database';
-        pill.className = 'supabase-pill is-connected';
-      } else if (status === 'error') {
-        pill.innerHTML = '<span class="status-dot red"></span> Setup Cloud Tables';
-        pill.title = 'Click for setup instructions. Schema needs to be run in Supabase SQL editor.';
-        pill.className = 'supabase-pill is-warning';
-      } else {
-        pill.innerHTML = '<span class="status-dot amber"></span> Connecting...';
-        pill.className = 'supabase-pill';
-      }
+    // No logo/pill in the top bar any more. Status is shown quietly in Settings -> Cloud Database.
+    updateStatusBadge(status, detail) {
+      this.lastStatus = status;
+      const pill = document.getElementById('supabase-status-pill');   // remove any leftover pill
+      if (pill) pill.remove();
+      const el = document.getElementById('cloud-sync-status');
+      if (!el) return;
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (status === 'connected') { el.textContent = 'Sync v2 · Connected and up to date (' + time + ')'; el.style.color = '#12805c'; }
+      else if (status === 'error') { el.textContent = 'Sync v2 · Not synced yet' + (detail ? ': ' + detail : '') + '. Changes are kept on this device and will retry.'; el.style.color = '#b4332d'; }
+      else { el.textContent = 'Sync v2 · Connecting…'; el.style.color = ''; }
     }
   };
-
 
   function readJson(k, fallback) {
     try {
@@ -410,8 +390,8 @@
     catch (e) { errors.push('settings: ' + ((e && (e.message || e.details)) || e)); }
     DB.isSyncing = false;
     if (errors.length) {
-      DB.isConnected = false; DB.updateStatusBadge('error');
       const msg = errors[0];
+      DB.isConnected = false; DB.updateStatusBadge('error', msg);
       if (msg !== lastErrorShown && window.notify) {
         lastErrorShown = msg;
         window.notify('Saved on this device, but not yet in the cloud (' + msg + '). It will retry automatically.', 'error', 'Cloud sync problem');
@@ -456,52 +436,13 @@
     try { if (this === window.localStorage && client && (STORE_TO_COLLECTION[key] || key === STORES.settings)) scheduleSync(); } catch (_) {}
   };
 
-  // Inject Styles for the Supabase Cloud badge
-  const style = document.createElement('style');
-  style.textContent = `
-    .supabase-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      color: #244153;
-      background: #eef6f9;
-      border: 1px solid #d0e4ed;
-      cursor: pointer;
-      user-select: none;
-      transition: all .2s ease;
-      margin-right: 8px;
-    }
-    .supabase-pill:hover {
-      background: #e1f0f5;
-    }
-    .supabase-pill .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .status-dot.green { background: #12b76a; box-shadow: 0 0 0 3px rgba(18,183,106,.2); }
-    .status-dot.red { background: #f04438; box-shadow: 0 0 0 3px rgba(240,68,56,.2); }
-    .status-dot.amber { background: #f79009; }
-    html[data-theme="dark"] .supabase-pill {
-      background: #172c36;
-      border-color: #2b4957;
-      color: #c9e2ee;
-    }
-  `;
-  document.head.appendChild(style);
-
   // ---- start-up: sync once the page is ready, and again whenever the device comes back online / the tab is reopened ----
   document.addEventListener('DOMContentLoaded', async () => {
     DB.updateStatusBadge('connecting');
     const test = await DB.testConnection();
     if (!test.ok) {
       console.warn('[Supabase Setup Required]', test.error);
-      DB.updateStatusBadge('error');
+      DB.updateStatusBadge('error', test.error);
       if (window.notify) window.notify('Cloud database not reachable (' + test.error + '). Your changes are kept on this device and will upload automatically when it is reachable.', 'error', 'Cloud sync problem');
       return;
     }
