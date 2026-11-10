@@ -9,9 +9,15 @@
           try { const value = JSON.parse(localStorage.getItem('church-members-v1') || '[]'); return Array.isArray(value) ? value : []; } catch (_) { return []; }
         }
         function readDepartments() {
-          if (Array.isArray(window.churchDepartments)) return window.churchDepartments.map(department => department.name).filter(Boolean);
-          try { const value = JSON.parse(localStorage.getItem('church-departments-v1') || '[]'); if (Array.isArray(value) && value.length) return value.map(department => department.name).filter(Boolean); } catch (_) {}
-          return ['Choir', 'Lactating Mothers', 'Left Back Seat', "Men's Fellowship", 'Middle Seat', 'Right Back Seat', 'Sunday School', "The Minister's Wife", "Women's Fellowship", "Children's Fellowship", 'Youth Fellowship'];
+          try {
+            const raw = localStorage.getItem('church-departments-v1');
+            if (raw !== null) {
+              const value = JSON.parse(raw);
+              if (Array.isArray(value)) return value.map(department => typeof department === 'string' ? department : department?.name).filter(Boolean);
+            }
+          } catch (_) {}
+          if (Array.isArray(window.churchDepartments)) return window.churchDepartments.map(department => typeof department === 'string' ? department : department?.name).filter(Boolean);
+          return [];
         }
         function renderMemberReport() {
           if (!memberReportBody) return;

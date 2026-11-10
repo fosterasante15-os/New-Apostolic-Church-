@@ -16,6 +16,7 @@
       const selectedDepts = () => [...deptBox.querySelectorAll('input[type="checkbox"]:checked')].map(i => i.value);
       function updateDeptCount() { const n = selectedDepts().length; f('member-dept-count').textContent = n ? `${n} selected` : 'None selected'; }
       function fillDeptSelect(keep = selectedDepts()) {
+        if (!Array.isArray(keep)) keep = selectedDepts();
         const names = deptNames(); const all = [...names, ...keep.filter(k => !names.includes(k))];   /* keep a department even if it was removed from the list */
         deptBox.replaceChildren();
         all.forEach(name => {
@@ -26,7 +27,7 @@
         updateDeptCount();
       }
       fillDeptSelect();
-      window.addEventListener('departments-change', fillDeptSelect);
+      window.addEventListener('departments-change', () => fillDeptSelect());
       window.addEventListener('department-renamed', e => {
         members = members.map(m => { const list = window.memberDepartments(m); if (!list.includes(e.detail.from)) return m; const next = list.map(d => d === e.detail.from ? e.detail.to : d); return { ...m, departments: next, department: next.join(', ') }; });
         persist(); render();
@@ -102,7 +103,7 @@
         f('member-notice').textContent = `${birthdays.length} birthday ${birthdays.length === 1 ? 'member' : 'members'} found for ${monthName}.`;
       }
 
-      function render() {
+      function render(emit = true) {
         const q = searchInput.value.trim().toLowerCase(), dept = deptFilter.value, st = statusFilter.value;
         const visible = members.filter(m =>
           (!q || [m.id, m.name, m.phone, m.email, m.place].some(v => (v || '').toLowerCase().includes(q))) &&
@@ -114,7 +115,17 @@
           const idBadge = document.createElement('span'); idBadge.className = 'member-id'; idBadge.textContent = m.id;
           const person = document.createElement('div'); person.className = 'person';
           const avatar = document.createElement('span'); avatar.className = 'avatar';
-          if (m.photo) { const im = document.createElement('img'); im.src = m.photo; im.alt = ''; avatar.append(im); } else avatar.textContent = (m.name || '?').trim().charAt(0).toUpperCase();
+          const initial = (m.name || '?').trim().charAt(0).toUpperCase() || '?';
+          if (m.photo) {
+            const im = document.createElement('img');
+            im.src = m.photo;
+            im.alt = m.name || '';
+            im.decoding = 'async';
+            im.addEventListener('error', () => { avatar.replaceChildren(); avatar.textContent = initial; });
+            avatar.append(im);
+          } else {
+            avatar.textContent = initial;
+          }
           const nm = document.createElement('span'); nm.className = 'person-name'; nm.textContent = m.name; person.append(avatar, nm);
           const contact = td(); contact.className = 'contact';
           const c1 = document.createElement('span'); c1.textContent = m.email || '—';
@@ -132,12 +143,21 @@
         updateDashboardTotals();
         updateBirthdayWishes();
         window.churchMembers = members;
-        window.dispatchEvent(new CustomEvent('members-change', { detail: members }));
+        if (emit !== false) {
+          const prev = isReloading;
+          isReloading = true;
+          try {
+            window.dispatchEvent(new CustomEvent('members-change', { detail: members }));
+          } finally {
+            isReloading = prev;
+          }
+        }
       }
 
 
       /* ---- Profile photo: choose a file or use the camera; photos are cropped square and resized. ---- */
       const photoPreview = f('member-photo-preview'), photoRemove = f('member-photo-remove');
+      let isReloading = false;
       function setPhoto(dataUrl) {
         currentPhoto = dataUrl || '';
         photoPreview.replaceChildren();
@@ -146,18 +166,42 @@
         photoRemove.hidden = !currentPhoto;
       }
       function toSquareJpeg(source, w, h, size = 320) {
-        const side = Math.min(w, h), canvas = document.createElement('canvas');
+        const rawW = w || source?.naturalWidth || source?.videoWidth || source?.width || size;
+        const rawH = h || source?.naturalHeight || source?.videoHeight || source?.height || size;
+        const side = Math.max(1, Math.min(rawW, rawH)), canvas = document.createElement('canvas');
         canvas.width = canvas.height = Math.min(size, side);
-        canvas.getContext('2d').drawImage(source, (w - side) / 2, (h - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', 0.85);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return '';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(source, (rawW - side) / 2, (rawH - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
+        const out = canvas.toDataURL('image/jpeg', 0.85);
+        return (out && out !== 'data:,') ? out : '';
+      }
+      function readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result || ''));
+          r.onerror = () => reject(new Error('That image could not be read.'));
+          r.readAsDataURL(file);
+        });
       }
       f('member-photo-file').addEventListener('change', e => {
         const file = e.target.files[0]; e.target.value = '';
         if (!file) return;
-        if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { formError.textContent = 'Please choose a JPEG, PNG, or WebP image.'; return; }
+        const validType = /^image\/(jpe?g|png|webp)$/i.test(file.type || '') || /\.(jpe?g|png|webp)$/i.test(file.name || '');
+        if (!validType) { formError.textContent = 'Please choose a JPEG, PNG, or WebP image.'; return; }
         formError.textContent = '';
         const url = URL.createObjectURL(file), img = new Image();
-        img.onload = () => { setPhoto(toSquareJpeg(img, img.naturalWidth, img.naturalHeight)); URL.revokeObjectURL(url); };
+        img.onload = async () => {
+          const cropped = toSquareJpeg(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+          URL.revokeObjectURL(url);
+          if (cropped) {
+            setPhoto(cropped);
+          } else {
+            try { setPhoto(await readFileAsDataUrl(file)); } catch (_) { formError.textContent = 'That image could not be read. Try another file.'; }
+          }
+        };
         img.onerror = () => { URL.revokeObjectURL(url); formError.textContent = 'That image could not be read. Try another file.'; };
         img.src = url;
       });
@@ -279,12 +323,13 @@
 
       f('member-add').addEventListener('click', () => { pendingEdit = null; if (location.hash === '#member-new') prepareForm(null); else location.hash = '#member-new'; });
       f('member-filter').addEventListener('submit', e => { e.preventDefault(); render(); });
-      searchInput.addEventListener('input', render); deptFilter.addEventListener('change', render); statusFilter.addEventListener('change', render);
+      searchInput.addEventListener('input', () => render()); deptFilter.addEventListener('change', () => render()); statusFilter.addEventListener('change', () => render());
       f('member-birthday-month').value = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
       f('member-birthday-show').addEventListener('click', showMemberBirthdays);
 
       form.addEventListener('submit', e => {
         e.preventDefault();
+        formError.textContent = '';
         const name = f('member-name').value.trim();
         if (!name) { formError.textContent = 'Please enter the full name.'; f('member-name').focus(); return; }
         if (!f('member-email').checkValidity()) { formError.textContent = 'Please enter a valid email address.'; f('member-email').focus(); return; }
@@ -295,13 +340,16 @@
         if (rawPhone && !phoneIntl) { formError.textContent = 'Enter a valid phone number, e.g. 024 123 4567 or +233241234567.'; f('member-phone').focus(); return; }
         const chosen = selectedDepts();
         if (!chosen.length && deptNames().length) { formError.textContent = 'Choose at least one department.'; deptBox.querySelector('input')?.focus(); return; }
-        const values = { name, email, phone: f('member-phone').value.trim(), dob: f('member-dob').value, notes: f('member-notes').value.trim(), photo: currentPhoto, place: f('member-place').value.trim(), departments: chosen, department: chosen.join(', '), joined: f('member-joined').value, status: f('member-status').value };
+        const updatedAt = new Date().toISOString();
+        const values = { name, email, phone: f('member-phone').value.trim(), dob: f('member-dob').value, notes: f('member-notes').value.trim(), photo: currentPhoto, place: f('member-place').value.trim(), departments: chosen, department: chosen.join(', '), joined: f('member-joined').value, status: f('member-status').value, updated_at: updatedAt };
         if (editingId) {
+          window.ChurchDB?.unmarkTombstone?.('members', editingId);
           members = members.map(m => m.id === editingId ? { ...m, ...values } : m);
           notice.textContent = `Member ${editingId} updated.`;
           notify(`${name} (${editingId}) updated.`, 'success');
         } else {
           const id = peekNextId();            /* re-checked at save time so two quick saves can never share an ID */
+          window.ChurchDB?.unmarkTombstone?.('members', id);
           members.unshift({ id, ...values });
           commitId(id);
           registeredId = id;
@@ -337,14 +385,23 @@
       });
       commitId(format(Math.max(readSeq(), ...members.map(m => numberOf(m.id)))));
       function reloadFromCloud() {
+        if (isReloading) return;
+        isReloading = true;
         try {
           const saved = JSON.parse(localStorage.getItem(STORE));
           if (Array.isArray(saved)) {
             members = saved;
             window.churchMembers = members;
-            render();
+            commitId(format(Math.max(readSeq(), ...members.map(m => numberOf(m.id)))));
+            if (editingId && !currentPhoto) {
+              const updated = members.find(m => m.id === editingId);
+              if (updated?.photo) setPhoto(updated.photo);
+            }
+            render(false);
           }
-        } catch (_) {}
+        } catch (_) {} finally {
+          isReloading = false;
+        }
       }
       window.addEventListener('members-change', reloadFromCloud);
       window.addEventListener('storage', e => { if (e.key === STORE) reloadFromCloud(); });

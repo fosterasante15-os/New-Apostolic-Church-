@@ -5,19 +5,31 @@
       let services = [];
       try {
         const saved = JSON.parse(localStorage.getItem(STORE));
-        if (Array.isArray(saved)) services = saved;
+        if (Array.isArray(saved)) services = saved.filter(v => v && typeof v === 'object' && v.date);
       } catch (_) {}
       window.churchServices = services;
       let editingId = null, pendingEdit = null;
 
       const f = id => document.getElementById(id);
+      const notify = (m, t, title) => { if (typeof window.notify === 'function') window.notify(m, t, title); };
       const rows = f('service-rows'), count = f('service-count'), notice = f('service-notice'), search = f('service-search');
       const form = f('service-form'), err = f('service-form-error');
       const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(services)); window.churchServices = services; window.dispatchEvent(new CustomEvent('services-change')); } catch (_) { notice.textContent = 'Changes work for this session but could not be saved in browser storage.'; } };
-      const sorted = () => [...services].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-      const parts = d => d.split('-').map(Number);
-      const isSunday = d => { const [y, m, day] = parts(d); return new Date(y, m - 1, day).getDay() === 0; };
-      const dayName = d => { const [y, m, day] = parts(d); return new Date(y, m - 1, day).toLocaleDateString('en-GB', { weekday: 'long' }); };
+      const sorted = () => [...services].filter(v => v && typeof v === 'object' && v.date).sort((a, b) => ((a.date || '') + (a.time || '')).localeCompare((b.date || '') + (b.time || '')));
+      const parts = d => String(d || '').split('-').map(Number);
+      const isSunday = d => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))) return false;
+        const [y, m, day] = parts(d);
+        const dt = new Date(y, m - 1, day);
+        return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === day && dt.getDay() === 0;
+      };
+      const dayName = d => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))) return 'invalid date';
+        const [y, m, day] = parts(d);
+        const dt = new Date(y, m - 1, day);
+        if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== day) return 'invalid calendar date';
+        return dt.toLocaleDateString('en-GB', { weekday: 'long' });
+      };
       const todayStr = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
       function nextSunday() { const n = new Date(); n.setDate(n.getDate() + ((7 - n.getDay()) % 7)); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; }
 
@@ -86,17 +98,21 @@
 
       form.addEventListener('submit', e => {
         e.preventDefault();
+        err.textContent = '';
         const date = f('service-date').value, time = f('service-time').value, venue = f('service-venue').value.trim(), description = f('service-desc').value.trim();
         if (!date) { err.textContent = 'Please choose a date.'; f('service-date').focus(); return; }
         if (!isSunday(date)) { err.textContent = `${date} is a ${dayName(date)}. Please choose a Sunday.`; f('service-date').focus(); return; }
         if (!time) { err.textContent = 'Please set the time.'; f('service-time').focus(); return; }
         if (!venue) { err.textContent = 'Please enter the venue.'; f('service-venue').focus(); return; }
-        if (services.some(v => v.date === date && v.time === time && v.id !== editingId)) { err.textContent = `A Sunday service is already scheduled on ${date} at ${time}.`; return; }
+        if (services.some(v => v && v.date === date && v.time === time && v.id !== editingId)) { err.textContent = `A Sunday service is already scheduled on ${date} at ${time}.`; return; }
         if (editingId) {
-          services = services.map(v => v.id === editingId ? { ...v, date, time, venue, description } : v);
+          window.ChurchDB?.unmarkTombstone?.('services', editingId);
+          services = services.map(v => v && v.id === editingId ? { ...v, date, time, venue, description } : v);
           notice.textContent = `Sunday service on ${date} updated.`; notify(`Sunday service on ${date} updated.`, 'success');
         } else {
-          services.push({ id: `svc-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, date, time, venue, description });
+          const id = `svc-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+          window.ChurchDB?.unmarkTombstone?.('services', id);
+          services.push({ id, date, time, venue, description });
           notice.textContent = `Sunday service on ${date} added.`; notify(`Sunday service on ${date} at ${time} added.`, 'success', 'Service added');
         }
         persist(); render(); location.hash = '#sunday-services';
@@ -104,25 +120,30 @@
 
       rows.addEventListener('click', e => {
         const btn = e.target.closest('button[data-action]'); if (!btn) return;
-        const v = services.find(x => x.id === btn.closest('tr')?.dataset.serviceId); if (!v) return;
+        const v = services.find(x => x && x.id === btn.closest('tr')?.dataset.serviceId); if (!v) return;
         if (btn.dataset.action === 'edit') { pendingEdit = v; location.hash = '#service-new'; }
         if (btn.dataset.action === 'delete' && window.confirm(`Delete the Sunday service on ${v.date} at ${v.time}?`)) {
-          services = services.filter(x => x.id !== v.id);
+          services = services.filter(x => x && x.id !== v.id);
           persist();
           render();
           notice.textContent = `Sunday service on ${v.date} deleted.`;
           window.ChurchDB?.deleteItem('services', v.id);
         }
       });
+      let isReloading = false;
       function reloadServices() {
+        if (isReloading) return;
+        isReloading = true;
         try {
           const saved = JSON.parse(localStorage.getItem(STORE));
           if (Array.isArray(saved)) {
-            services = saved;
+            services = saved.filter(v => v && typeof v === 'object' && v.date);
             window.churchServices = services;
             render();
           }
-        } catch (_) {}
+        } catch (_) {} finally {
+          isReloading = false;
+        }
       }
       window.addEventListener('services-change', reloadServices);
       window.addEventListener('storage', e => { if (e.key === STORE) reloadServices(); });

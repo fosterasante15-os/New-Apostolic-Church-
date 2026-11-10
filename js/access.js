@@ -1,9 +1,33 @@
 (() => {
+      window.memberDepartments = m => Array.isArray(m?.departments) && m.departments.length ? m.departments.filter(Boolean) : (m?.department ? String(m.department).split(/\s*,\s*/).filter(Boolean) : []);
       const STORAGE_KEY = 'church-auth-v1';
       const MAIN_ADMIN = { id: 'user-main-admin', name: 'Main Admin', email: 'fosterasante15@gmail.com', role: 'main-admin', status: 'Active' };
+      function clearExpiredTokens() {
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch (_) {}
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && /^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k);
+          }
+        } catch (_) {}
+      }
+      function isSessionExpired(sess) {
+        if (!sess || typeof sess !== 'object') return true;
+        const nowMs = Date.now();
+        if (sess.expiresAt) {
+          const exp = typeof sess.expiresAt === 'number' ? (sess.expiresAt < 1e12 ? sess.expiresAt * 1000 : sess.expiresAt) : Date.parse(sess.expiresAt);
+          if (!Number.isNaN(exp) && exp <= nowMs) return true;
+        }
+        if (sess.expires_at) {
+          const exp = typeof sess.expires_at === 'number' ? (sess.expires_at < 1e12 ? sess.expires_at * 1000 : sess.expires_at) : Date.parse(sess.expires_at);
+          if (!Number.isNaN(exp) && exp <= nowMs) return true;
+        }
+        return false;
+      }
       let session;
       try { session = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null'); } catch (_) { session = null; }
-      if (!session || typeof session !== 'object' || !['admin', 'main-admin', 'account'].includes(String(session.role || '').toLowerCase())) {
+      if (!session || typeof session !== 'object' || isSessionExpired(session) || !['admin', 'main-admin', 'account'].includes(String(session.role || '').toLowerCase())) {
+        clearExpiredTokens();
         location.replace('login.html?from=index.html');
         return;
       }
@@ -17,14 +41,36 @@
       const isAccount = () => role() === 'account';                 /* dues-only accounts officer */
       const canRecordDues = () => isAdmin() || isAccount();
       const maintenanceEnabled = () => {
-        try { const saved = JSON.parse(localStorage.getItem('church-reconstruction-settings-v1') || 'null'); return Boolean(saved?.values?.maintenanceMode); }
+        try { const saved = JSON.parse(localStorage.getItem('church-reconstruction-settings-v1') || 'null'); return Boolean(saved?.values?.maintenanceMode ?? saved?.maintenanceMode); }
         catch (_) { return false; }
       };
       const setName = name => { session.name = String(name || '').trim() || session.name; try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session)); } catch (_) {} };
       const recorder = () => ({ id: session.id || '', name: session.name || String(session.email || '').split('@')[0] || 'Admin', email: session.email || '', role: role() });
       const canManageDue = due => isMainAdmin() || (canRecordDues() && !!due?.recordedBy?.id && due.recordedBy.id === session.id);
+      async function verifySessionRefresh() {
+        try {
+          if (isSessionExpired(session)) {
+            clearExpiredTokens();
+            location.replace('login.html?from=index.html');
+            return false;
+          }
+          if (session?.isCloud && window.ChurchDB && typeof window.ChurchDB.getSession === 'function') {
+            const cloudSession = await window.ChurchDB.getSession();
+            if (!cloudSession) {
+              clearExpiredTokens();
+              location.replace('login.html?from=index.html');
+              return false;
+            }
+          }
+          return true;
+        } catch (_) {
+          clearExpiredTokens();
+          location.replace('login.html?from=index.html');
+          return false;
+        }
+      }
       window.memberDepartments = m => Array.isArray(m?.departments) && m.departments.length ? m.departments.filter(Boolean) : (m?.department ? String(m.department).split(/\s*,\s*/).filter(Boolean) : []);
-      window.ChurchAccess = { getSession: () => ({ ...session }), isMainAdmin, isAdmin, isMember, isMaintenanceMode: maintenanceEnabled, recorder, canManageDue, setName, isAccount, canRecordDues };
+      window.ChurchAccess = { getSession: () => ({ ...session }), isMainAdmin, isAdmin, isMember, isMaintenanceMode: maintenanceEnabled, recorder, canManageDue, setName, isAccount, canRecordDues, verifySessionRefresh };
 
       function applyAccess() {
         const owner = isMainAdmin();
@@ -78,7 +124,12 @@
           window.notify?.(message, 'error', 'Access restricted');
         }
       }
-      document.addEventListener('DOMContentLoaded', applyAccess);
+      document.addEventListener('DOMContentLoaded', () => {
+        applyAccess();
+        if (session?.isCloud) {
+          verifySessionRefresh();
+        }
+      });
       window.addEventListener('hashchange', applyAccess);
       window.addEventListener('maintenance-change', applyAccess);
     })();

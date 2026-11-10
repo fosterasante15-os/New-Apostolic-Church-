@@ -41,7 +41,12 @@
         var params = new URLSearchParams(location.search);
         if (!params.has('loggedout')) {
           var s = JSON.parse(sessionStorage.getItem('church-auth-v1') || 'null');
-          if (s && typeof s === 'object' && ['admin', 'main-admin', 'account'].includes(String(s.role || '').toLowerCase())) {
+          var rawExp = s && (s.expiresAt || s.expires_at);
+          var expMs = rawExp ? (typeof rawExp === 'number' ? (rawExp < 1e12 ? rawExp * 1000 : rawExp) : Date.parse(rawExp)) : NaN;
+          var expired = !Number.isNaN(expMs) && expMs <= Date.now();
+          if (expired) {
+            sessionStorage.removeItem('church-auth-v1');
+          } else if (s && typeof s === 'object' && ['admin', 'main-admin', 'account'].includes(String(s.role || '').toLowerCase())) {
             var from = params.get('from');
             var home = (from && /^[\w.-]+\.html$/.test(from)) ? from : 'index.html';
             location.replace(home);

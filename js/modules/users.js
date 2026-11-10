@@ -81,10 +81,78 @@
     }
   }
 
+  const ROLE_LABELS = { 'main-admin': 'Main admin', admin: 'Admin', account: 'Account', member: 'Member' };
+  function normalizeRoleKey(rawRole) {
+    const r = String(rawRole || '').trim().toLowerCase();
+    return ROLE_LABELS[r] ? r : 'member';
+  }
+  function formatRoleLabel(rawRole) {
+    const trimmed = String(rawRole || '').trim();
+    if (!trimmed) return 'Member';
+    const lower = trimmed.toLowerCase();
+    return ROLE_LABELS[lower] || trimmed;
+  }
+
+  function sha256Fallback(ascii) {
+    const rightRotate = (value, amount) => (value >>> amount) | (value << (32 - amount));
+    const mathPow = Math.pow, maxWord = mathPow(2, 32);
+    let result = '';
+    const words = [], asciiBitLength = ascii.length * 8;
+    let hash = [], k = [];
+    let primeCounter = 0;
+    const isComposite = {};
+    for (let candidate = 2; primeCounter < 64; candidate++) {
+      if (!isComposite[candidate]) {
+        for (let i = 0; i < 313; i += candidate) isComposite[i] = candidate;
+        hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+        k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+      }
+    }
+    ascii += '\x80';
+    while ((ascii.length % 64) - 56) ascii += '\x00';
+    for (let i = 0; i < ascii.length; i++) {
+      const j = ascii.charCodeAt(i);
+      words[i >> 2] |= j << ((3 - (i % 4)) * 8);
+    }
+    words[words.length] = (asciiBitLength / maxWord) | 0;
+    words[words.length] = asciiBitLength;
+    for (let j = 0; j < words.length;) {
+      const w = words.slice(j, (j += 16)), oldHash = hash.slice(0);
+      for (let i = 0; i < 64; i++) {
+        const w15 = w[i - 15], w2 = w[i - 2];
+        const a = hash[0], e = hash[4];
+        const temp1 = hash[7] + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) + ((e & hash[5]) ^ (~e & hash[6])) + k[i] + (w[i] = i < 16 ? w[i] : (w[i - 16] + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | 0);
+        const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+        hash = [(temp1 + temp2) | 0].concat(hash);
+        hash[4] = (hash[4] + temp1) | 0;
+        hash.pop();
+      }
+      for (let i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+    for (let i = 0; i < 8; i++) {
+      for (let j = 3; j + 1; j--) {
+        const b = (hash[i] >> (j * 8)) & 255;
+        result += (b < 16 ? 0 : '') + b.toString(16);
+      }
+    }
+    return result;
+  }
+
+  async function computeHash(input) {
+    const bytes = new TextEncoder().encode(input);
+    if (window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function') {
+      const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return sha256Fallback(binary);
+  }
+
   function render() {
     const query = searchInput.value.trim().toLowerCase();
     const selectedRole = roleFilter.value;
-    const pendingList = users.filter(u => String(u.status).toLowerCase() === 'pending');
+    const pendingList = users.filter(u => u && String(u.status || '').toLowerCase() === 'pending');
     syncNavBadge(pendingList.length);
 
     let pendingBanner = document.getElementById('user-pending-banner');
@@ -103,38 +171,47 @@
       pendingBanner.hidden = true;
     }
 
-    const visible = users.filter(user =>
-      (!query || [user.name, user.email, user.role === 'main-admin' ? 'main admin' : user.role, user.status].some(value => String(value || '').toLowerCase().includes(query))) &&
-      (selectedRole === 'all' || user.role === selectedRole)
-    );
+    const visible = users.filter(user => {
+      if (!user || typeof user !== 'object') return false;
+      const roleKey = normalizeRoleKey(user.role);
+      const roleLabel = formatRoleLabel(user.role);
+      return (!query || [user.name, user.email, roleKey === 'main-admin' ? 'main admin' : roleLabel, user.status].some(value => String(value || '').toLowerCase().includes(query))) &&
+        (selectedRole === 'all' || (user.role || 'member') === selectedRole || roleKey === selectedRole);
+    });
     rows.replaceChildren();
     visible.forEach(user => {
-      const isPending = String(user.status || '').toLowerCase() === 'pending';
+      const rawStatus = String(user.status || '').trim();
+      const statusLower = rawStatus.toLowerCase();
+      const isPending = statusLower === 'pending';
       const tr = document.createElement('tr'); tr.dataset.userId = user.id;
       if (isPending) tr.style.backgroundColor = 'rgba(245, 158, 11, 0.05)';
 
       const email = document.createElement('td');
       if (user.name && user.name !== user.email) {
-        email.innerHTML = `<span style="font-weight:600;display:block;">${user.name}</span><span style="font-size:12px;color:var(--muted);">${user.email}</span>`;
+        email.innerHTML = `<span style="font-weight:600;display:block;">${user.name}</span><span style="font-size:12px;color:var(--muted);">${user.email || ''}</span>`;
       } else {
         email.style.fontWeight = '600';
-        email.textContent = user.email;
+        email.textContent = user.email || '—';
       }
 
       const role = document.createElement('td');
-      role.textContent = ({ 'main-admin': 'Main admin', admin: 'Admin', account: 'Account', member: 'Member' })[user.role] || user.role;
+      const roleKey = normalizeRoleKey(user.role);
+      const roleBadge = document.createElement('span');
+      roleBadge.className = `role-badge role-${roleKey}`;
+      roleBadge.textContent = formatRoleLabel(user.role);
+      role.append(roleBadge);
 
       const statusCell = document.createElement('td');
       const badge = document.createElement('span');
       if (isPending) {
         badge.className = 'status pending';
         badge.textContent = 'Pending Approval';
-      } else if (user.status.toLowerCase() === 'active') {
+      } else if (statusLower === 'active' || !rawStatus) {
         badge.className = 'status';
         badge.textContent = 'Active';
       } else {
         badge.className = 'status inactive';
-        badge.textContent = user.status;
+        badge.textContent = rawStatus;
       }
       statusCell.append(badge);
 
@@ -161,7 +238,7 @@
       } else {
         const edit = document.createElement('button'); edit.type = 'button'; edit.dataset.action = 'edit'; edit.textContent = 'Edit'; actionGroup.append(edit);
         const current = isCurrentUser(user);
-        if ((user.role === 'admin' || user.role === 'account' || user.role === 'main-admin') && !current) { const reset = document.createElement('button'); reset.type = 'button'; reset.dataset.action = 'reset-password'; reset.textContent = 'Reset password'; actionGroup.append(reset); }
+        if ((roleKey === 'admin' || roleKey === 'account' || roleKey === 'main-admin') && !current) { const reset = document.createElement('button'); reset.type = 'button'; reset.dataset.action = 'reset-password'; reset.textContent = 'Reset password'; actionGroup.append(reset); }
         if (!current) { const del = document.createElement('button'); del.type = 'button'; del.dataset.action = 'delete'; del.className = 'delete'; del.textContent = 'Delete'; actionGroup.append(del); }
       }
 
@@ -197,7 +274,7 @@
 
     emailInput.value = user?.email || '';
     passwordInput.value = '';
-    roleInput.value = approveMode ? (user?.role && user.role !== 'member' ? user.role : 'admin') : (user?.role || 'member');
+    roleInput.value = approveMode ? (user?.role && user.role !== 'member' ? user.role : 'admin') : normalizeRoleKey(user?.role);
     statusInput.value = (approveMode || resetMode) ? 'Active' : (user?.status || 'Active');
 
     if (approveMode) {
@@ -230,13 +307,13 @@
     event.preventDefault();
     const email = emailInput.value.trim().toLowerCase();
     if (!email || !emailInput.checkValidity()) { emailInput.reportValidity(); return; }
-    const duplicate = users.some(user => user.email.toLowerCase() === email && user.id !== editingId);
+    const duplicate = users.some(user => user && String(user.email || '').toLowerCase() === email && user.id !== editingId);
     if (duplicate) { window.alert('That email address is already in the local user list.'); return; }
     const password = passwordInput.value;
     if ((!editingId || resetMode) && !approveMode && password.length < 8) { passwordInput.setCustomValidity('Use at least 8 characters.'); passwordInput.reportValidity(); passwordInput.setCustomValidity(''); return; }
     if (editingId && password && password.length < 8) { passwordInput.setCustomValidity('Use at least 8 characters.'); passwordInput.reportValidity(); passwordInput.setCustomValidity(''); return; }
     if (!window.ChurchAccess?.isMainAdmin()) { window.notify?.('Only the main admin can manage user accounts.', 'error', 'Main admin access needed'); return; }
-    if (editingId && users.find(user => user.id === editingId)?.role === 'main-admin' && roleInput.value !== 'main-admin') {
+    if (editingId && users.find(user => user && user.id === editingId)?.role === 'main-admin' && roleInput.value !== 'main-admin') {
       window.alert('The main admin account must keep the Main admin role.');
       roleInput.value = 'main-admin';
       return;
@@ -250,7 +327,8 @@
     if (approveMode) values.status = selectedStatus || 'Active';
 
     if (editingId) {
-      users = users.map(user => user.id === editingId ? { ...user, ...values } : user);
+      window.ChurchDB?.unmarkTombstone?.('profiles', editingId);
+      users = users.map(user => user && user.id === editingId ? { ...user, ...values } : user);
       if (editingId === 'user-main-admin') {
         try {
           const sess = JSON.parse(sessionStorage.getItem('church-auth-v1') || '{}');
@@ -298,20 +376,20 @@
       }
     } else {
       values.id = (crypto.randomUUID ? crypto.randomUUID() : `user-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      window.ChurchDB?.unmarkTombstone?.('profiles', values.id);
       values.lastLogin = '—';
       users.unshift(values);
       notice.textContent = 'User added to this browser.';
     }
 
     if (password) {
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`church-v1|${values.id || editingId}|${password}`));
-      const hash = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+      const hash = await computeHash(`church-v1|${values.id || editingId}|${password}`);
       let stored = {}; try { stored = JSON.parse(localStorage.getItem(credentialsKey) || '{}'); } catch (_) {}
       stored[values.id || editingId] = hash;
       try { localStorage.setItem(credentialsKey, JSON.stringify(stored)); } catch (_) {}
 
       if (!approveMode) {
-        const targetId = values.id || editingId, targetEmail = (users.find(u => u.id === targetId)?.email) || email, wasReset = resetMode;
+        const targetId = values.id || editingId, targetEmail = (users.find(u => u && u.id === targetId)?.email) || email, wasReset = resetMode;
         try {
           const notices = JSON.parse(localStorage.getItem(noticesKey) || '[]');
           const list = Array.isArray(notices) ? notices : [];

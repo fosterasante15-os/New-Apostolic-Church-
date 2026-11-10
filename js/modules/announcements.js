@@ -153,13 +153,21 @@
         if (button.dataset.action === 'sms') { sendSms(item); return; }
         if (button.dataset.action === 'wa') {
           const church = (document.querySelector('[data-church-name]')?.textContent || 'New Apostolic Church Kumasi Central').trim();
-          const text = `📢 *${item.title}*\n\n${item.content || ''}\n\n📍 ${church}`;
+          const text = `📢 *${item.title || ''}*\n\n${item.content || ''}\n\n📍 ${church}`;
+          const safeEncode = str => {
+            const raw = String(str ?? '');
+            const clean = typeof raw.toWellFormed === 'function'
+              ? raw.toWellFormed()
+              : raw.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+            return encodeURIComponent(clean).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+          };
+          const waUrl = `https://wa.me/?text=${safeEncode(text)}`;
           if (navigator.share) {
             navigator.share({ title: item.title, text }).catch(() => {
-              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+              window.open(waUrl, '_blank', 'noopener,noreferrer');
             });
           } else {
-            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+            window.open(waUrl, '_blank', 'noopener,noreferrer');
           }
           return;
         }

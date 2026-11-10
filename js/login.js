@@ -9,7 +9,61 @@
   const message = (text, ok) => { $('auth-message').textContent = text; $('auth-message').classList.toggle('ok', Boolean(ok)); };
   const readJson = (k, fallback) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fallback; } catch (_) { return fallback; } };
   const creds = () => { const v = readJson(CRED_KEY, {}); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; };
-  const hashPw = async (id, pw) => { if (!(window.crypto && crypto.subtle)) throw new Error('Secure sign-in needs https or localhost.'); const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`church-v1|${id}|${pw}`)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); };
+  function sha256Fallback(ascii) {
+    const rightRotate = (value, amount) => (value >>> amount) | (value << (32 - amount));
+    const mathPow = Math.pow, maxWord = mathPow(2, 32);
+    let result = '';
+    const words = [], asciiBitLength = ascii.length * 8;
+    let hash = [], k = [];
+    let primeCounter = 0;
+    const isComposite = {};
+    for (let candidate = 2; primeCounter < 64; candidate++) {
+      if (!isComposite[candidate]) {
+        for (let i = 0; i < 313; i += candidate) isComposite[i] = candidate;
+        hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+        k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+      }
+    }
+    ascii += '\x80';
+    while ((ascii.length % 64) - 56) ascii += '\x00';
+    for (let i = 0; i < ascii.length; i++) {
+      const j = ascii.charCodeAt(i);
+      words[i >> 2] |= j << ((3 - (i % 4)) * 8);
+    }
+    words[words.length] = (asciiBitLength / maxWord) | 0;
+    words[words.length] = asciiBitLength;
+    for (let j = 0; j < words.length;) {
+      const w = words.slice(j, (j += 16)), oldHash = hash.slice(0);
+      for (let i = 0; i < 64; i++) {
+        const w15 = w[i - 15], w2 = w[i - 2];
+        const a = hash[0], e = hash[4];
+        const temp1 = hash[7] + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) + ((e & hash[5]) ^ (~e & hash[6])) + k[i] + (w[i] = i < 16 ? w[i] : (w[i - 16] + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | 0);
+        const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+        hash = [(temp1 + temp2) | 0].concat(hash);
+        hash[4] = (hash[4] + temp1) | 0;
+        hash.pop();
+      }
+      for (let i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+    for (let i = 0; i < 8; i++) {
+      for (let j = 3; j + 1; j--) {
+        const b = (hash[i] >> (j * 8)) & 255;
+        result += (b < 16 ? 0 : '') + b.toString(16);
+      }
+    }
+    return result;
+  }
+
+  const hashPw = async (id, pw) => {
+    const bytes = new TextEncoder().encode(`church-v1|${id}|${pw}`);
+    if (window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function') {
+      const buf = await window.crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return sha256Fallback(binary);
+  };
   const ACT_KEY = 'church-activity-v1';
   function logActivity(entry) {
     try {
@@ -31,7 +85,14 @@
   const AUTH_ROLES = ['admin', 'main-admin', 'account'];
   let signedIn = null;
   try { signedIn = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch (_) {}
-  const hasValidRole = signedIn && typeof signedIn === 'object' && AUTH_ROLES.includes(String(signedIn.role || '').toLowerCase());
+  const isExpired = sess => {
+    if (!sess || typeof sess !== 'object') return true;
+    const rawExp = sess.expiresAt ?? sess.expires_at;
+    if (!rawExp) return false;
+    const exp = typeof rawExp === 'number' ? (rawExp < 1e12 ? rawExp * 1000 : rawExp) : Date.parse(rawExp);
+    return !Number.isNaN(exp) && exp <= Date.now();
+  };
+  const hasValidRole = signedIn && typeof signedIn === 'object' && !isExpired(signedIn) && AUTH_ROLES.includes(String(signedIn.role || '').toLowerCase());
   if (hasValidRole && !params.has('loggedout')) {
     location.replace(HOME);
     return;

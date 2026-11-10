@@ -60,7 +60,17 @@
       function showLogo(data) {
         logoPreview.replaceChildren();
         if (!data) { const mark = document.createElement('span'); mark.textContent = '✦'; logoPreview.append(mark); return; }
-        const img = document.createElement('img'); img.src = data; img.alt = 'Selected church logo preview'; logoPreview.append(img);
+        const img = document.createElement('img');
+        img.src = data;
+        img.alt = 'Selected church logo preview';
+        img.decoding = 'async';
+        img.addEventListener('error', () => {
+          logoPreview.replaceChildren();
+          const mark = document.createElement('span');
+          mark.textContent = '✦';
+          logoPreview.append(mark);
+        });
+        logoPreview.append(img);
       }
       function applySettings(data = defaultSettings(), savedLogo = '') {
         for (const [name,value] of Object.entries(data)) {
@@ -78,11 +88,20 @@
         const mark = document.querySelector('.brand-mark');
         if (!mark) return;
         mark.replaceChildren();
-        if (logoData) { const img = document.createElement('img'); img.src = logoData; img.alt = `${name} logo`; mark.append(img); mark.classList.add('has-logo'); mark.removeAttribute('aria-hidden'); }
-        else { const img = document.createElement('img'); img.src = 'img/download.jpg'; img.alt = `${name} logo`; mark.append(img); mark.classList.add('has-logo'); mark.removeAttribute('aria-hidden'); }
+        const img = document.createElement('img');
+        img.src = logoData || 'img/download.jpg';
+        img.alt = `${name} logo`;
+        img.decoding = 'async';
+        if (logoData) {
+          img.addEventListener('error', () => { img.src = 'img/download.jpg'; }, { once: true });
+        }
+        mark.append(img);
+        mark.classList.add('has-logo');
+        mark.removeAttribute('aria-hidden');
       }
+      let isReloading = false;
       /* Push the saved profile (name, logo, address, phone, email) to every place in the app that shows it. */
-      function applyProfile() {
+      function applyProfile(emit = true) {
         const v = {};
         for (const field of form.querySelectorAll('[name]')) { if (field.type !== 'file') v[field.name] = field.type === 'checkbox' ? field.checked : field.value; }
         const name = (v.churchName || '').trim() || DEFAULT_CHURCH_NAME;
@@ -102,13 +121,31 @@
         }
         applyLogo(name);
         const frame = document.getElementById('church-map'); if (frame) frame.title = `Map showing ${name}`;
-        window.churchProfile = { name, address, phone, email };
-        window.dispatchEvent(new CustomEvent('church-profile-change'));
+        window.churchProfile = { name, address, phone, email, logo: logoData };
+        if (emit !== false) {
+          const prevReloading = isReloading;
+          isReloading = true;
+          try {
+            window.dispatchEvent(new CustomEvent('church-profile-change'));
+          } finally {
+            isReloading = prevReloading;
+          }
+        }
+      }
+
+      function normalizeSavedSettings(saved) {
+        if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return null;
+        if (saved.values && typeof saved.values === 'object' && !Array.isArray(saved.values)) {
+          return { values: { ...defaultSettings(), ...saved.values }, logo: typeof saved.logo === 'string' ? saved.logo : '' };
+        }
+        const { logo, id, updated_at, ...rest } = saved;
+        return { values: { ...defaultSettings(), ...rest }, logo: typeof logo === 'string' ? logo : '' };
       }
 
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
-        if (saved && typeof saved === 'object' && saved.values) applySettings({...defaultSettings(),...saved.values}, saved.logo || '');
+        const normalized = normalizeSavedSettings(saved);
+        if (normalized) applySettings(normalized.values, normalized.logo);
         else applySettings();
       } catch (_) { applySettings(); }
       applyProfile();
@@ -127,34 +164,64 @@
         const image = await new Promise((resolve,reject) => {
           const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('That image could not be opened.')); img.src = source;
         });
-        const side = Math.min(image.naturalWidth, image.naturalHeight);
-        if (!side) throw new Error('That image could not be opened.');
+        const rawW = image.naturalWidth || image.width || 256;
+        const rawH = image.naturalHeight || image.height || 256;
+        const side = Math.min(rawW, rawH);
+        if (!side) return source;
         const size = Math.min(256, side);
         const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
         const context = canvas.getContext('2d');
-        if (!context) throw new Error('Image resizing is not available in this browser.');
+        if (!context) return source;
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, size, size);
         context.imageSmoothingQuality = 'high';
-        context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, size, size);
-        const blob = await new Promise(resolve => canvas.toBlob(resolve,'image/webp',0.9));
-        return await readDataUrl(blob || file);
+        context.drawImage(image, (rawW - side) / 2, (rawH - side) / 2, side, side, 0, 0, size, size);
+        if (typeof canvas.toBlob === 'function') {
+          try {
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+            if (blob) {
+              const blobUrl = await readDataUrl(blob);
+              if (blobUrl && blobUrl !== 'data:,') return blobUrl;
+            }
+          } catch (_) {}
+        }
+        const out = canvas.toDataURL('image/jpeg', 0.88);
+        return (out && out !== 'data:,') ? out : source;
       }
       logoFile.addEventListener('change', async () => {
+        if (window.ChurchAccess && typeof window.ChurchAccess.isMainAdmin === 'function' && !window.ChurchAccess.isMainAdmin()) {
+          announce('Only the main admin can update church settings.', 'error', 'Main admin access needed');
+          logoFile.value = '';
+          return;
+        }
         const file = logoFile.files?.[0];
         if (!file) return;
-        if (!['image/jpeg','image/png','image/webp'].includes(file.type)) { announce('Choose a JPEG, PNG, or WebP image.', 'error', 'Logo not updated'); logoFile.value = ''; return; }
+        const validType = /^image\/(jpe?g|png|webp)$/i.test(file.type || '') || /\.(jpe?g|png|webp)$/i.test(file.name || '');
+        if (!validType) { announce('Choose a JPEG, PNG, or WebP image.', 'error', 'Logo not updated'); logoFile.value = ''; return; }
         if (file.size > 8 * 1024 * 1024) { announce('Choose an image smaller than 8 MB.', 'error', 'Logo not updated'); logoFile.value = ''; return; }
         try {
           logoData = await squareLogo(file);
-          showLogo(logoData); applyLogo();
+          showLogo(logoData);
           let saved = {};
           try { saved = JSON.parse(localStorage.getItem(storageKey) || 'null') || {}; } catch (_) { saved = {}; }
-          try { localStorage.setItem(storageKey, JSON.stringify({ values: saved.values || defaultSettings(), logo: logoData })); announce('The logo was cropped to a square and resized to fit beside the church name.', 'success', 'Logo updated'); }
-          catch (_) { announce('Browser storage is full, so the logo applies to this session only.', 'error', 'Logo not saved'); }
+          const normalized = normalizeSavedSettings(saved);
+          try {
+            localStorage.setItem(storageKey, JSON.stringify({ values: normalized ? normalized.values : readValues(), logo: logoData }));
+            applyProfile();
+            announce('The logo was cropped to a square and resized to fit beside the church name.', 'success', 'Logo updated');
+          } catch (_) {
+            applyProfile();
+            announce('Browser storage is full, so the logo applies to this session only.', 'error', 'Logo not saved');
+          }
         } catch (error) { announce(error.message || 'The logo could not be processed.', 'error', 'Logo not updated'); }
         logoFile.value = '';
       });
       form.addEventListener('submit', async event => {
         event.preventDefault();
+        if (window.ChurchAccess && typeof window.ChurchAccess.isMainAdmin === 'function' && !window.ChurchAccess.isMainAdmin()) {
+          announce('Only the main admin can update church settings.', 'error', 'Main admin access needed');
+          return;
+        }
         if (!form.reportValidity()) { announce('Please correct the highlighted fields and try again.', 'error', 'Settings not saved'); return; }
         submit.disabled = true;
         try {
@@ -172,18 +239,36 @@
         } finally { submit.disabled = false; }
       });
       document.getElementById('settings-reset').addEventListener('click', () => {
+        if (window.ChurchAccess && typeof window.ChurchAccess.isMainAdmin === 'function' && !window.ChurchAccess.isMainAdmin()) {
+          announce('Only the main admin can reset church settings.', 'error', 'Main admin access needed');
+          return;
+        }
         form.reset();
-        logoData = ''; pendingLogo = null; logoFile.value = ''; showLogo(''); applyProfile();
-        try { localStorage.removeItem(storageKey); window.dispatchEvent(new CustomEvent('maintenance-change')); announce('All settings and the logo were restored to their defaults.', 'success', 'Settings reset', ['Church profile and logo','Session and security options','Backup and maintenance options']); }
-        catch (_) { announce('Defaults restored for this session, but browser storage could not be cleared.', 'error', 'Reset incomplete'); }
+        applySettings(defaultSettings(), '');
+        try {
+          localStorage.setItem(storageKey, JSON.stringify({ values: defaultSettings(), logo: '' }));
+          localStorage.removeItem(storageKey);
+          applyProfile();
+          window.dispatchEvent(new CustomEvent('maintenance-change'));
+          announce('All settings and the logo were restored to their defaults.', 'success', 'Settings reset', ['Church profile and logo','Session and security options','Backup and maintenance options']);
+        } catch (_) {
+          applyProfile();
+          announce('Defaults restored for this session, but browser storage could not be cleared.', 'error', 'Reset incomplete');
+        }
       });
 
       function reloadSettings() {
+        if (isReloading) return;
+        isReloading = true;
         try {
           const s = JSON.parse(localStorage.getItem(storageKey) || 'null');
-          if (s && typeof s === 'object' && s.values) applySettings({ ...defaultSettings(), ...s.values }, s.logo || '');
-          applyProfile();
-        } catch (_) {}
+          const normalized = normalizeSavedSettings(s);
+          if (normalized) applySettings(normalized.values, normalized.logo);
+          else applySettings(defaultSettings(), '');
+          applyProfile(false);
+        } catch (_) {} finally {
+          isReloading = false;
+        }
       }
       window.addEventListener('church-profile-change', reloadSettings);
       window.addEventListener('storage', e => { if (e.key === storageKey) reloadSettings(); });

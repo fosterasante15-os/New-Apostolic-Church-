@@ -46,11 +46,15 @@
     (function () {
       try {
         var s = JSON.parse(sessionStorage.getItem('church-auth-v1') || 'null');
-        if (s && typeof s === 'object' && ['admin', 'main-admin', 'account'].includes(String(s.role || '').toLowerCase())) {
+        var rawExp = s && (s.expiresAt || s.expires_at);
+        var expMs = rawExp ? (typeof rawExp === 'number' ? (rawExp < 1e12 ? rawExp * 1000 : rawExp) : Date.parse(rawExp)) : NaN;
+        var expired = !Number.isNaN(expMs) && expMs <= Date.now();
+        if (s && typeof s === 'object' && !expired && ['admin', 'main-admin', 'account'].includes(String(s.role || '').toLowerCase())) {
           var g = document.getElementById('auth-guard-style');
           if (g && g.parentNode) g.parentNode.removeChild(g);
           return;
         }
+        if (expired) sessionStorage.removeItem('church-auth-v1');
       } catch (_) {}
       location.replace('login.html?from=index.html');
     })();

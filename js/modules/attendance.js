@@ -7,7 +7,7 @@
       const STATUSES = ['present', 'late', 'absent', 'excused'];
       let draft = {}, draftKey = null;
 
-      const readAll = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } };
+      const readAll = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } };
       function members() {
         if (Array.isArray(window.churchMembers)) return window.churchMembers;
         try { const v = JSON.parse(localStorage.getItem(MEMBERS)); if (Array.isArray(v)) return v; } catch (_) {}

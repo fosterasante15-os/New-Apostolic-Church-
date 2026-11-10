@@ -50,7 +50,19 @@
           if (ministers.length > 0) {
             ministers.slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)).forEach(minister => {
               const card = document.createElement('article'); card.className = 'minister-card';
-              const avatar = document.createElement('div'); avatar.className = 'minister-avatar'; avatar.textContent = String(minister.name || 'M').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+              const initials = String(minister.name || 'M').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'M';
+              const avatar = document.createElement('div'); avatar.className = 'minister-avatar';
+              if (minister.photo) {
+                const img = document.createElement('img');
+                img.className = 'managed-minister-photo';
+                img.src = minister.photo;
+                img.alt = `Photo of ${minister.name || 'Minister'}`;
+                img.decoding = 'async';
+                img.addEventListener('error', () => { avatar.replaceChildren(); avatar.textContent = initials; });
+                avatar.append(img);
+              } else {
+                avatar.textContent = initials;
+              }
               const name = document.createElement('h3'); name.textContent = minister.name || 'Minister';
               const role = document.createElement('div'); role.className = 'minister-role'; role.textContent = minister.role || 'Minister';
               const note = document.createElement('p'); note.textContent = minister.note || '';
@@ -62,6 +74,6 @@
           }
         }
       }
-      ['members-change', 'services-change', 'dues-change', 'ministers-change', 'church-profile-change', 'attendance-change', 'offerings-change'].forEach(event => window.addEventListener(event, render));
+      ['members-change', 'services-change', 'dues-change', 'ministers-change', 'church-profile-change', 'attendance-change', 'offerings-change', 'storage'].forEach(event => window.addEventListener(event, render));
       render(); setTimeout(render, 0);
     })();

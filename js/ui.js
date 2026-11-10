@@ -44,15 +44,47 @@
       const saveProfiles = p => { try { localStorage.setItem(KEY, JSON.stringify(p)); return true; } catch (_) { return false; } };
       const ROLE = { 'main-admin': 'Main admin', admin: 'Administrator', account: 'Account' };
       const me = sess();
-      if (!me.id) return;
-      const mine = () => profiles()[me.id] || {};
+      if (!me.id && !me.email) return;
+      const mine = () => {
+        const all = profiles();
+        const cur = sess();
+        const idKey = cur.id || me.id;
+        const emailKey = String(cur.email || me.email || '').toLowerCase();
+        const byId = (idKey && all[idKey] && typeof all[idKey] === 'object') ? all[idKey] : {};
+        const byEmail = (emailKey && all[emailKey] && typeof all[emailKey] === 'object') ? all[emailKey] : {};
+        let userPhoto = '';
+        if (!byId.photo && !byEmail.photo) {
+          try {
+            const users = JSON.parse(localStorage.getItem('church-reconstruction-users-v1') || '[]');
+            if (Array.isArray(users)) {
+              const found = users.find(u => u && ((idKey && String(u.id) === String(idKey)) || (emailKey && String(u.email || '').toLowerCase() === emailKey)));
+              if (found?.photo) userPhoto = found.photo;
+            }
+          } catch (_) {}
+        }
+        return {
+          ...byEmail,
+          ...byId,
+          name: byId.name || byEmail.name || '',
+          photo: byId.photo || byEmail.photo || userPhoto || ''
+        };
+      };
       const displayName = () => (mine().name || sess().name || String(sess().email || '').split('@')[0] || 'User').trim();
       const letter = () => (displayName().match(/[\p{L}\p{N}]/u) || ['?'])[0].toUpperCase();
 
       function paint(el, photo) {
+        if (!el) return;
         el.replaceChildren();
-        if (photo) { const img = document.createElement('img'); img.alt = ''; img.src = photo; img.addEventListener('error', () => { el.replaceChildren(document.createTextNode(letter())); }); el.append(img); }
-        else el.textContent = letter();
+        if (photo) {
+          const img = document.createElement('img');
+          img.alt = '';
+          img.src = photo;
+          img.decoding = 'async';
+          img.addEventListener('error', () => { el.replaceChildren(document.createTextNode(letter())); });
+          el.append(img);
+        } else {
+          el.textContent = letter();
+        }
       }
       function render() {
         const photo = mine().photo || '';
@@ -91,14 +123,33 @@
       $('profile-close').addEventListener('click', () => dialog.close()); $('profile-cancel').addEventListener('click', () => dialog.close());
       file.addEventListener('change', () => {
         const f = file.files && file.files[0]; if (!f) return; errorBox.textContent = '';
-        if (!/^image\//.test(f.type)) { errorBox.textContent = 'Choose an image file (JPG, PNG or WebP).'; return; }
+        const validType = /^image\//i.test(f.type || '') || /\.(jpe?g|png|webp)$/i.test(f.name || '');
+        if (!validType) { errorBox.textContent = 'Choose an image file (JPG, PNG or WebP).'; return; }
         if (f.size > 10 * 1024 * 1024) { errorBox.textContent = 'That image is too large. Choose one under 10 MB.'; return; }
+        const readRaw = () => new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result || ''));
+          r.onerror = () => reject(new Error('Could not read file'));
+          r.readAsDataURL(f);
+        });
         const url = URL.createObjectURL(f), img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
           const size = 256, c = document.createElement('canvas'); c.width = c.height = size; const ctx = c.getContext('2d');
-          const side = Math.min(img.naturalWidth, img.naturalHeight), sx = (img.naturalWidth - side) / 2, sy = (img.naturalHeight - side) / 2;
-          ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);   /* square centre-crop, kept small for browser storage */
-          draftPhoto = c.toDataURL('image/jpeg', 0.85); URL.revokeObjectURL(url); showDraft();
+          URL.revokeObjectURL(url);
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, size, size);
+            const rawW = img.naturalWidth || img.width || size, rawH = img.naturalHeight || img.height || size;
+            const side = Math.max(1, Math.min(rawW, rawH)), sx = (rawW - side) / 2, sy = (rawH - side) / 2;
+            ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);   /* square centre-crop, kept small for browser storage */
+            const out = c.toDataURL('image/jpeg', 0.85);
+            if (out && out !== 'data:,') {
+              draftPhoto = out;
+              showDraft();
+              return;
+            }
+          }
+          try { draftPhoto = await readRaw(); showDraft(); } catch (_) { errorBox.textContent = 'That image could not be read. Try another one.'; }
         };
         img.onerror = () => { URL.revokeObjectURL(url); errorBox.textContent = 'That image could not be read. Try another one.'; };
         img.src = url;
@@ -107,12 +158,20 @@
         event.preventDefault();
         const name = nameInput.value.trim();
         if (!name) { errorBox.textContent = 'Enter a display name.'; nameInput.focus(); return; }
-        const all = profiles(); all[me.id] = { name, photo: draftPhoto };
+        const all = profiles();
+        const cur = sess();
+        const idKey = cur.id || me.id;
+        const emailKey = String(cur.email || me.email || '').toLowerCase();
+        const entry = { name, photo: draftPhoto, email: emailKey, updated_at: new Date().toISOString() };
+        if (idKey) all[idKey] = entry;
+        if (emailKey) all[emailKey] = entry;
         if (!saveProfiles(all)) { errorBox.textContent = 'Could not save. The photo may be too large for browser storage.'; return; }
         access?.setName?.(name); render(); dialog.close();
         window.notify?.('Your profile has been updated.', 'success', 'Profile saved');
       });
       window.addEventListener('storage', e => { if (e.key === KEY) render(); });
+      window.addEventListener('profiles-change', render);
+      window.addEventListener('users-change', render);
     })();
 
 /* Light / dark theme switch (moon = go dark, sun = go light). The choice is remembered per browser. */

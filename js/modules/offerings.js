@@ -7,9 +7,16 @@
       const todayStr = () => ymd(new Date()), monthNow = () => todayStr().slice(0, 7);
       const lastSunday = () => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return ymd(d); };
       const parts = s => String(s).split('-').map(Number);
-      const isSunday = s => { const [y, m, d] = parts(s); return new Date(y, m - 1, d).getDay() === 0; };
-      const money = v => `GH₵${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      const sum = rows => rows.reduce((t, r) => t + Number(r.amount || 0), 0);
+      const isSunday = s => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))) return false;
+        const [y, m, d] = parts(s);
+        const dt = new Date(y, m - 1, d);
+        return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d && dt.getDay() === 0;
+      };
+      const numAmount = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+      const isValidAmount = amount => Number.isFinite(amount) && Number(amount.toFixed(2)) > 0;
+      const money = v => `GH₵${numAmount(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const sum = rows => Number(rows.reduce((t, r) => t + numAmount(r?.amount), 0).toFixed(2));
       const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
       const monthLabel = m => { const [y, mo] = parts(m); return new Date(y, mo - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }); };
       const prettyDate = s => { const [y, m, d] = parts(s); return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
@@ -72,10 +79,10 @@
         const date = $('ot-s-date').value, amount = Number($('ot-s-amount').value);
         if (!date) { err.textContent = 'Choose the Sunday date.'; return; }
         if (!isSunday(date)) { err.textContent = 'That date is not a Sunday. Choose a Sunday.'; return; }
-        if (!(amount > 0)) { err.textContent = 'Enter an amount greater than zero.'; return; }
+        if (!isValidAmount(amount)) { err.textContent = 'Enter an amount greater than zero.'; return; }
         const values = { date, amount: amount.toFixed(2), note: $('ot-s-note').value.trim() };
-        if (sEdit) { offerings = offerings.map(r => r.id === sEdit ? { ...r, ...values } : r); notify('Sunday offering updated.', 'success'); }
-        else { offerings.push({ id: newId('so'), createdAt: new Date().toISOString(), ...values }); notify(`Sunday offering of ${money(amount)} recorded.`, 'success'); }
+        if (sEdit) { window.ChurchDB?.unmarkTombstone?.('offerings', sEdit); offerings = offerings.map(r => r.id === sEdit ? { ...r, ...values } : r); notify('Sunday offering updated.', 'success'); }
+        else { const id = newId('so'); window.ChurchDB?.unmarkTombstone?.('offerings', id); offerings.push({ id, createdAt: new Date().toISOString(), ...values }); notify(`Sunday offering of ${money(amount)} recorded.`, 'success'); }
         persist(); resetSunday(); shown = date.slice(0, 7); $('ot-month').value = shown; render();
       });
       $('ot-t-form').addEventListener('submit', event => {
@@ -83,10 +90,10 @@
         if (!isAdmin()) { err.textContent = 'Only an admin can record thanksgiving.'; notify(err.textContent, 'error', 'Admin access needed'); return; }
         const date = $('ot-t-date').value, amount = Number($('ot-t-amount').value);
         if (!date) { err.textContent = 'Choose the date.'; return; }
-        if (!(amount > 0)) { err.textContent = 'Enter an amount greater than zero.'; return; }
+        if (!isValidAmount(amount)) { err.textContent = 'Enter an amount greater than zero.'; return; }
         const values = { date, amount: amount.toFixed(2), giver: $('ot-t-giver').value.trim(), location: $('ot-t-location').value.trim(), note: $('ot-t-note').value.trim() };
-        if (tEdit) { thanks = thanks.map(r => r.id === tEdit ? { ...r, ...values } : r); notify('Thanksgiving updated.', 'success'); }
-        else { thanks.push({ id: newId('tg'), createdAt: new Date().toISOString(), ...values }); notify(`Thanksgiving of ${money(amount)} recorded.`, 'success'); }
+        if (tEdit) { window.ChurchDB?.unmarkTombstone?.('thanksgiving', tEdit); thanks = thanks.map(r => r.id === tEdit ? { ...r, ...values } : r); notify('Thanksgiving updated.', 'success'); }
+        else { const id = newId('tg'); window.ChurchDB?.unmarkTombstone?.('thanksgiving', id); thanks.push({ id, createdAt: new Date().toISOString(), ...values }); notify(`Thanksgiving of ${money(amount)} recorded.`, 'success'); }
         persist(); resetThanks(); shown = date.slice(0, 7); $('ot-month').value = shown; render();
       });
       $('ot-s-rows').addEventListener('click', event => {
