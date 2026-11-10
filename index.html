@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Church Management — Dashboard</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=20261110">
   <script>
     /* Theme is applied before first paint so the page never flashes the wrong colours. */
     (function () { try { var t = localStorage.getItem('church-theme-v1'); document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); } catch (_) { document.documentElement.setAttribute('data-theme', 'light'); } })();
@@ -599,6 +599,7 @@
                 <button type="button" class="primary-button" onclick="window.ChurchDB?.pushAllToCloud()">Upload Local Data to Cloud</button>
                 <button type="button" class="plain-button" onclick="window.ChurchDB?.pullAllFromCloud(false)">Refresh Data from Cloud</button>
               </div>
+              <p id="cloud-sync-status" role="status" style="margin:0;font-size:13px;color:var(--muted);">Sync status: waiting…</p>
             </div>
           </section>
           <p class="reconstruction-note">Records are synchronized with your Supabase cloud PostgreSQL database whenever online, and cached locally for instant offline loading.</p>
@@ -754,30 +755,30 @@
   </dialog>
   <!-- Supabase Cloud SDK & Data Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-  <script src="js/supabase-client.js"></script>
+  <script src="js/supabase-client.js?v=20261110"></script>
 
   <!-- Core Security & Infrastructure -->
-  <script src="js/access.js"></script>
-  <script src="js/notifications.js"></script>
-  <script src="js/slideshow.js"></script>
+  <script src="js/access.js?v=20261110"></script>
+  <script src="js/notifications.js?v=20261110"></script>
+  <script src="js/slideshow.js?v=20261110"></script>
 
   <!-- Business Modules -->
-  <script src="js/modules/departments.js"></script>
-  <script src="js/modules/services.js"></script>
-  <script src="js/modules/members.js"></script>
-  <script src="js/modules/momo.js"></script>
-  <script src="js/modules/dues.js"></script>
-  <script src="js/modules/offerings.js"></script>
-  <script src="js/modules/attendance.js"></script>
-  <script src="js/modules/ministers.js"></script>
-  <script src="js/modules/announcements.js"></script>
-  <script src="js/modules/users.js"></script>
-  <script src="js/modules/activity.js"></script>
-  <script src="js/modules/reports.js"></script>
-  <script src="js/modules/settings.js"></script>
-  <script src="js/modules/dashboard.js"></script>
+  <script src="js/modules/departments.js?v=20261110"></script>
+  <script src="js/modules/services.js?v=20261110"></script>
+  <script src="js/modules/members.js?v=20261110"></script>
+  <script src="js/modules/momo.js?v=20261110"></script>
+  <script src="js/modules/dues.js?v=20261110"></script>
+  <script src="js/modules/offerings.js?v=20261110"></script>
+  <script src="js/modules/attendance.js?v=20261110"></script>
+  <script src="js/modules/ministers.js?v=20261110"></script>
+  <script src="js/modules/announcements.js?v=20261110"></script>
+  <script src="js/modules/users.js?v=20261110"></script>
+  <script src="js/modules/activity.js?v=20261110"></script>
+  <script src="js/modules/reports.js?v=20261110"></script>
+  <script src="js/modules/settings.js?v=20261110"></script>
+  <script src="js/modules/dashboard.js?v=20261110"></script>
 
   <!-- UI Components (Profile, Account, Theme Toggle) -->
-  <script src="js/ui.js"></script>
+  <script src="js/ui.js?v=20261110"></script>
 </body>
 </html>
