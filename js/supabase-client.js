@@ -267,6 +267,9 @@
     ministers: { store: STORES.ministers, newFirst: true, map: [['id','id'],['name','name'],['role','role'],
       ['note','bio'],['photo','photo'],['order','display_order','int']] },
     announcements: { store: STORES.announcements, newFirst: true, map: [['id','id'],['title','title'],['date','date'],['content','content']] },
+    activity: { store: STORES.activity, table: 'activity_logs', newFirst: true, map: [
+      ['id','id'],['at','at'],['entity','entity'],['action','action'],['userId','user_id'],['userName','user_name'],['role','role'],['summary','summary'],['data','data','json',{}]
+    ] },
     // guests / visitors recorded on the Attendance page
     guests: { store: STORES.guests, table: 'guests', optional: true, newFirst: true, map: [['id','id'],['serviceKey','service_key'],['date','date'],['name','name'],['phone','phone'],['place','place'],['invitedBy','invited_by'],['note','note']] },
     // account profiles (display name + photo), keyed by e-mail: { "name@x.com": { name, photo } }
@@ -358,7 +361,19 @@
 
     const sel = await client.from(def.table).select('*');
     if (sel.error) throw sel.error;
-    const cloudById = new Map((sel.data || []).map(r => [String(r.id), r]));
+    let cloudRows = sel.data || [];
+    // These three exact rows were demo placeholders shipped by the old UI.
+    // Remove them everywhere so a phone with an old local cache cannot resurrect them.
+    if (def.table === 'members') {
+      const placeholders = cloudRows.filter(row => /^NAC-000[1-3]$/.test(String(row.id || '')) && /^Member 00[1-3]$/.test(String(row.name || '')) && /@example\.net$/i.test(String(row.email || '')));
+      if (placeholders.length) {
+        const { error } = await client.from(def.table).delete().in('id', placeholders.map(row => row.id));
+        if (error) throw error;
+        const removed = new Set(placeholders.map(row => String(row.id)));
+        cloudRows = cloudRows.filter(row => !removed.has(String(row.id)));
+      }
+    }
+    const cloudById = new Map(cloudRows.map(r => [String(r.id), r]));
 
     const lh = new Map(), ch = new Map(), cItem = new Map();
     localById.forEach((it, id) => lh.set(id, hash(stable(toRow(def, it)))));

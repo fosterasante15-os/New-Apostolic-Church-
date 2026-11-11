@@ -1,17 +1,6 @@
 (() => {
   const storageKey = 'church-reconstruction-users-v1', credentialsKey = 'church-credentials-v1', noticesKey = 'church-user-notices-v1', profilesKey = 'church-profiles-v1', activityKey = 'church-activity-v1';
-  const seed = [
-    { id: 'user-main-admin', email: 'fosterasante15@gmail.com', name: 'Main Admin', role: 'main-admin', status: 'Active', lastLogin: '—' },
-    { id: 'user-admin-001', email: 'nanaboakye@icloud.com', name: 'Nana Boakye', role: 'admin', status: 'Active', lastLogin: '—' },
-    { id: 'user-member-001', email: 'member001@example.invalid', role: 'member', status: 'Active', lastLogin: '—' },
-    { id: 'user-member-002', email: 'member002@example.invalid', role: 'member', status: 'Active', lastLogin: '—' },
-    { id: 'user-member-003', email: 'member003@example.invalid', role: 'member', status: 'Active', lastLogin: '—' },
-    { id: 'user-current-admin', email: 'current-admin@example.invalid', role: 'admin', status: 'Active', lastLogin: '10/13/2026, 11:54 AM', current: true },
-    { id: 'user-member-004', email: 'member004@example.invalid', role: 'member', status: 'Active', lastLogin: '—' },
-    { id: 'user-member-005', email: 'member005@example.invalid', role: 'member', status: 'Active', lastLogin: '—' },
-    { id: 'user-staff-001', email: 'staff001@example.invalid', role: 'member', status: 'Active', lastLogin: '—' }
-  ];
-  let users = seed, hasSavedUsers = false;
+  let users = [], hasSavedUsers = false;
   const readJson = (k, fallback) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fallback; } catch (_) { return fallback; } };
 
   function logActivity(entry) {
@@ -22,17 +11,6 @@
     } catch (_) {}
   }
 
-  try {
-    const saved = JSON.parse(localStorage.getItem(storageKey));
-    if (Array.isArray(saved)) { users = saved; hasSavedUsers = true; }
-  } catch (_) { /* Storage may be disabled; in-memory actions still work. */ }
-
-  if (!hasSavedUsers && !users.some(user => user.role === 'main-admin')) {
-    users.unshift({ id: 'user-main-admin', email: 'fosterasante15@gmail.com', name: 'Main Admin', role: 'main-admin', status: 'Active', lastLogin: '—' });
-  }
-  users = users.map(user => user.id === 'user-main-admin' ? { ...user, email: 'fosterasante15@gmail.com', name: user.name || 'Main Admin' } : user);
-  if (!users.some(user => user.id === 'user-main-admin')) users.unshift({ id: 'user-main-admin', email: 'fosterasante15@gmail.com', name: 'Main Admin', role: 'main-admin', status: 'Active', lastLogin: '—' });
-  if (!users.some(user => String(user.email).toLowerCase() === 'nanaboakye@icloud.com')) users.push({ id: 'user-admin-nanaboakye', email: 'nanaboakye@icloud.com', name: 'Nana Boakye', role: 'admin', status: 'Active', lastLogin: '—' });
 
   const rows = document.getElementById('user-rows');
   const count = document.getElementById('user-count');
@@ -249,10 +227,24 @@
     const values = { email, role: selectedRole, status: selectedStatus };
     if (approveMode) values.status = selectedStatus || 'Active';
 
+    if (!editingId && !approveMode) {
+      window.notify?.('New accounts must be registered through the sign-in page so the password is stored securely in Supabase Auth.', 'info', 'Use registration');
+      return;
+    }
+    if (resetMode) {
+      window.notify?.('Password resets must be completed through the Supabase Auth administrator flow; this page will not save a browser-only password.', 'info', 'Secure password reset');
+      return;
+    }
+
     /* Approval is saved online FIRST. If that fails nothing changes, so the person is never shown as approved while still blocked. */
     if (approveMode) {
       try { await window.ChurchDB.decideRegistration({ email, approve: true, role: selectedRole, decidedBy: activeSession()?.email }); }
       catch (err) { window.notify?.(`Could not save the approval online: ${err.message || err}`, 'error', 'Approval not saved'); return; }
+    }
+
+    if (editingId && !approveMode && window.ChurchDB?.client) {
+      const { error } = await window.ChurchDB.client.from('profiles').update({ email, role: selectedRole, status: selectedStatus }).eq('id', editingId);
+      if (error) { window.notify?.(`Could not save the user in Supabase: ${error.message || error}`, 'error', 'User not saved'); return; }
     }
 
     if (editingId) {
@@ -293,7 +285,7 @@
 
         window.notify?.(`User ${email} approved as ${roleLabel}!`, 'success', 'User Approved');
       } else {
-        notice.textContent = resetMode ? 'Password reset and account unlocked in this browser.' : 'User updated in this browser.';
+        notice.textContent = 'User profile updated in Supabase.';
       }
     } else {
       values.id = (crypto.randomUUID ? crypto.randomUUID() : `user-${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -362,9 +354,8 @@
     }
     if (button.dataset.action === 'edit') openDialog(user);
     if (button.dataset.action === 'reset-password' && (user.role === 'admin' || user.role === 'account' || user.role === 'main-admin')) openDialog(user, true);
-    if (button.dataset.action === 'delete' && !user.current && window.confirm(`Delete local user entry ${user.email}? This does not change or revoke any real account.`)) {
-      users = users.filter(entry => entry.id !== user.id);
-      persist(); render(); notice.textContent = 'User entry deleted from this browser.';
+    if (button.dataset.action === 'delete' && !user.current) {
+      window.notify?.('Account deletion is disabled here because removing a profile does not revoke its Supabase Auth account. Use the secure Auth administrator flow.', 'info', 'Account not deleted');
     }
   });
 
@@ -377,7 +368,32 @@
     }
   });
 
+  async function loadCloudUsers() {
+    const client = window.ChurchDB?.client;
+    if (!client) return;
+    try {
+      const { data, error } = await client.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      const current = activeSession();
+      users = (data || []).map(profile => ({
+        id: profile.id,
+        email: profile.email,
+        name: profile.name || String(profile.email || '').split('@')[0],
+        role: profile.role || 'member',
+        status: profile.status || 'Active',
+        lastLogin: profile.last_login || '—',
+        photo: profile.photo_url || ''
+      }));
+      if (current?.id && !users.some(user => user.id === current.id)) users.unshift({ ...current, lastLogin: '—' });
+      render();
+    } catch (error) {
+      notice.textContent = `Could not load users from Supabase: ${error.message || error}`;
+    }
+  }
   render();
+  setTimeout(loadCloudUsers, 700);
+  window.addEventListener('online', loadCloudUsers);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') loadCloudUsers(); });
 
   /* ---- Registration requests (online): the Main Admin receives them immediately, on any device ---- */
   const seenKey = 'church-seen-registrations-v1';

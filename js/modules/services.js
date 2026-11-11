@@ -2,9 +2,10 @@
     (() => {
       const STORE = 'church-services-v1';
       const DEFAULTS = { description: 'Weekly worship service.', time: '09:00', venue: 'Main Auditorium' };
-      const seedDates = ['2026-08-02','2026-08-09','2026-08-16','2026-08-23','2026-08-30','2026-09-06','2026-09-13','2026-09-20','2026-09-27','2026-10-04','2026-10-11','2026-10-18','2026-10-25'];
-      let services = seedDates.map((date, i) => ({ id: `svc-seed-${i + 1}`, date, ...DEFAULTS }));
+      let services = [];
       try { const saved = JSON.parse(localStorage.getItem(STORE)); if (Array.isArray(saved)) services = saved; } catch (_) {}
+      const cleanServices = services.filter(service => !/^svc-seed-/.test(String(service.id || '')));
+      if (cleanServices.length !== services.length) { services = cleanServices; try { localStorage.setItem(STORE, JSON.stringify(services)); } catch (_) {} }
       window.churchServices = services;
       let editingId = null, pendingEdit = null;
 

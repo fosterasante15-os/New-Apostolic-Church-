@@ -1,20 +1,13 @@
 /* Departments: admins can create, edit and delete departments. Every department list in the app stays in sync. */
     (() => {
       const STORE = 'church-departments-v1';
-      const seed = [
-        ['Choir', 'Choir ministry'], ['Lactating Mothers', 'Pregnant Woman ministry'], ['Left Back Seat', 'Left Back Seat ministry'],
-        ["Men's Fellowship", "Men's Fellowship ministry"], ['Middle Seat', 'Middle Seat ministry'], ['Right Back Seat', 'Right Back Seat ministry'],
-        ['Sunday School', 'Sunday School ministry'], ["The Minister's Wife", "The Minister's Wife ministry"], ["Women's Fellowship", "Women's Fellowship ministry"],
-        ["Children's Fellowship", "Children's ministry"], ['Youth Fellowship', 'Youth ministry'], ['Evangelism', 'Evangelism ministry'], ['Welfare', 'Welfare ministry']
-      ].map(([name, description], i) => ({ id: `dept-seed-${i + 1}`, name, description }));
-      let departments = seed;
+      let departments = [];
       try {
         const saved = JSON.parse(localStorage.getItem(STORE));
-        if (Array.isArray(saved) && saved.length) {
-          const existing = new Set(saved.map(department => department.name));
-          departments = [...saved, ...seed.filter(department => !existing.has(department.name))];
-        }
+        if (Array.isArray(saved)) departments = saved;
       } catch (_) {}
+      const cleanDepartments = departments.filter(department => !/^dept-seed-/.test(String(department.id || '')));
+      if (cleanDepartments.length !== departments.length) { departments = cleanDepartments; try { localStorage.setItem(STORE, JSON.stringify(departments)); } catch (_) {} }
       window.churchDepartments = departments;
       let counts = {}, editingId = null, pendingEdit = null;
 

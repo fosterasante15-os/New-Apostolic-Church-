@@ -1,13 +1,15 @@
 /* Members: every new member automatically receives a unique, never-reused Member ID (e.g. NAC-0004). */
     (() => {
       const STORE = 'church-members-v1', SEQ_STORE = 'church-member-seq-v1', PREFIX = 'NAC-', PAD = 4;
-      const seed = [
-        { id: 'NAC-0001', name: 'Member 001', email: 'member001@example.net', phone: '', dob: '', place: '', department: 'Choir', joined: '2024-01-15', status: 'Active' },
-        { id: 'NAC-0002', name: 'Member 002', email: 'member002@example.net', phone: '', dob: '', place: '', department: 'Sunday School', joined: '2023-08-04', status: 'Active' },
-        { id: 'NAC-0003', name: 'Member 003', email: 'member003@example.net', phone: '', dob: '', place: '', department: "Men's Fellowship", joined: '2022-11-21', status: 'Active' }
-      ];
-      let members = seed;
-      try { const saved = JSON.parse(localStorage.getItem(STORE)); if (Array.isArray(saved)) members = saved; } catch (_) {}
+      const isPlaceholder = member => member && /^NAC-000[1-3]$/.test(String(member.id || '')) && /^Member 00[1-3]$/.test(String(member.name || '')) && /@example\.net$/i.test(String(member.email || ''));
+      let members = [];
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORE));
+        if (Array.isArray(saved)) {
+          members = saved.filter(member => !isPlaceholder(member));
+          if (members.length !== saved.length) localStorage.setItem(STORE, JSON.stringify(members));
+        }
+      } catch (_) {}
 
       const isGone = x => x && x.status === 'Gone Soul';
       window.isGoneSoul = isGone;

@@ -556,20 +556,11 @@
           <section class="table-card" aria-label="Activity records">
             <div class="table-scroll"><table class="activity-table" style="min-width:980px">
               <thead><tr><th scope="col">When</th><th scope="col">User</th><th scope="col">Action</th><th scope="col">Entity</th><th scope="col">Details</th></tr></thead>
-              <tbody id="activity-rows">
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login" data-entity="user"><td>10/13/2026, 12:48:58 PM</td><td>Account 001</td><td><span class="announcement-status published">Login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login"}</code></details></td></tr>
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login-failed" data-entity="user"><td>10/13/2026, 12:48:26 PM</td><td>Account 001</td><td><span class="announcement-status draft">Failed login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login-failed"}</code></details></td></tr>
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login" data-entity="user"><td>10/13/2026, 12:02:24 PM</td><td>Account 001</td><td><span class="announcement-status published">Login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login"}</code></details></td></tr>
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login" data-entity="user"><td>10/13/2026, 12:02:19 PM</td><td>Account 001</td><td><span class="announcement-status published">Login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login"}</code></details></td></tr>
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login" data-entity="user"><td>10/13/2026, 11:54:55 AM</td><td>Account 001</td><td><span class="announcement-status published">Login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login"}</code></details></td></tr>
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login" data-entity="user"><td>10/13/2026, 11:31:27 AM</td><td>Account 001</td><td><span class="announcement-status published">Login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login"}</code></details></td></tr>
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login" data-entity="user"><td>10/13/2026, 11:28:42 AM</td><td>Account 001</td><td><span class="announcement-status published">Login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login"}</code></details></td></tr>
-                <tr data-date="2026-10-13" data-user="account-001" data-action="login" data-entity="user"><td>10/13/2026, 10:57:01 AM</td><td>Account 001</td><td><span class="announcement-status published">Login</span></td><td>User</td><td><details><summary>View details</summary><code>{"event":"login"}</code></details></td></tr>
-              </tbody>
+              <tbody id="activity-rows"></tbody>
             </table></div>
-            <div class="pagination"><span id="activity-count">8 example records shown · snapshot showed 122 total</span><div class="page-controls"><button type="button" disabled aria-label="Previous page">Previous</button><button type="button" disabled aria-label="Next page">Next</button><span class="activity-page-note">Page 1 of 7 in the snapshot</span></div></div>
+            <div class="pagination"><span id="activity-count">0 records shown</span><div class="page-controls"><button type="button" disabled aria-label="Previous page">Previous</button><button type="button" disabled aria-label="Next page">Next</button><span class="activity-page-note">Live records from Supabase</span></div></div>
           </section>
-          <p class="reconstruction-note">The supplied snapshot showed 122 records across 7 pages. Only its visible first-page login events are recreated here with anonymized account labels; remaining audit entries are not available in the attachment. Filters and CSV export work on these local examples. Audit events are read-only.</p>
+          <p class="reconstruction-note">Audit events are loaded from Supabase and synchronized across authorized computers and phones. Filters and CSV export use the live records.</p>
         </section>
         <!-- Settings page reconstructed from the user-provided snapshot; settings persist in this browser only. -->
         <section class="screen" id="settings" aria-label="Settings">
@@ -663,7 +654,7 @@
           <form class="filters report-filter-form" data-report-filters>
             <label>Sunday service<select class="filter-control" data-filter="service"><option value="all">All services</option><option>Sunday Service</option></select></label>
             <label>Department<select class="filter-control" data-filter="department"><option value="all">All departments</option><option>Choir</option><option>Sunday School</option><option>Men's Fellowship</option><option>Women's Fellowship</option></select></label>
-            <label>Member<select class="filter-control" data-filter="person"><option value="all">All members</option><option>Member 001</option><option>Member 002</option><option>Member 003</option><option>Member 004</option><option>Member 005</option></select></label>
+            <label>Member<select class="filter-control" data-filter="person"><option value="all">All members</option></select></label>
             <label>From<input class="filter-control" type="date" data-date-from></label><label>To<input class="filter-control" type="date" data-date-to></label>
             <button class="plain-button filter-submit" type="submit">Apply filters</button><button class="outline-link report-reset" type="button">Reset</button>
           </form>

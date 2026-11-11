@@ -164,7 +164,8 @@ CREATE TABLE public.activity_logs (
   user_name TEXT,
   role TEXT,
   summary TEXT,
-  data JSONB
+  data JSONB,
+  extra JSONB DEFAULT '{}'::jsonb
 );
 
 -- 13. System Settings
@@ -231,14 +232,6 @@ INSERT INTO public.church_settings (key, value)
 VALUES
   ('general', '{"churchName": "New Apostolic Church Kumasi Central", "churchAddress": "M9PW+3FQ, Kumasi, Ashanti, Ghana", "churchContact": "", "maintenanceMode": false}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
-
--- Seed Sample Members
-INSERT INTO public.members (id, name, email, phone, dob, place, department, departments, joined, status)
-VALUES
-  ('NAC-0001', 'Member 001', 'member001@example.net', '', '', '', 'Choir', '["Choir"]'::jsonb, '2024-01-15', 'Active'),
-  ('NAC-0002', 'Member 002', 'member002@example.net', '', '', '', 'Sunday School', '["Sunday School"]'::jsonb, '2023-08-04', 'Active'),
-  ('NAC-0003', 'Member 003', 'member003@example.net', '', '', '', 'Men''s Fellowship', '["Men''s Fellowship"]'::jsonb, '2022-11-21', 'Active')
-ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
 -- MAIN ADMIN LOGIN

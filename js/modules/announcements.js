@@ -13,16 +13,13 @@
       updateActiveNavigation();
 
       const storageKey = 'church-reconstruction-announcements-v1';
-      const seed = [
-        { id: 'seed-youth-retreat', title: 'Youth Retreat Registration', status: 'published', date: '2026-08-10' },
-        { id: 'seed-welcome-sunday', title: 'Welcome Sunday', status: 'published', date: '2026-08-01' },
-        { id: 'seed-easter-recap', title: 'Easter recap', status: 'archived', date: '2026-04-01' }
-      ];
-      let announcements = seed;
+      let announcements = [];
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
         if (Array.isArray(saved)) announcements = saved;
       } catch (_) { /* Storage may be disabled; in-memory actions still work. */ }
+      const cleanAnnouncements = announcements.filter(item => !/^seed-/.test(String(item.id || '')));
+      if (cleanAnnouncements.length !== announcements.length) { announcements = cleanAnnouncements; try { localStorage.setItem(storageKey, JSON.stringify(announcements)); } catch (_) {} }
 
       const rows = document.getElementById('announcement-rows');
       const count = document.getElementById('announcement-count');

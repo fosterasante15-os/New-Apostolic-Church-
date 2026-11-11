@@ -1,15 +1,12 @@
 (() => {
       const storageKey = 'church-reconstruction-ministers-v1';
-      const seed = [
-        { id: 'seed-minister-001', order: 1, name: 'Minister 001', role: 'Congregational Rector', note: 'Leads worship and pastoral care for the congregation.', photo: '' },
-        { id: 'seed-minister-002', order: 2, name: 'Minister 002', role: "Women's Fellowship Leader", note: 'Supports the women of the congregation and helps coordinate fellowship gatherings.', photo: '' },
-        { id: 'seed-minister-003', order: 3, name: 'Minister 003', role: "Men's Fellowship Leader", note: 'Serves the men of the church and assists with Sunday service arrangements.', photo: '' }
-      ];
-      let ministers = seed;
+      let ministers = [];
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
         if (Array.isArray(saved)) ministers = saved;
       } catch (_) { /* Storage may be disabled; in-memory actions still work. */ }
+      const cleanMinisters = ministers.filter(minister => !/^seed-minister-/.test(String(minister.id || '')));
+      if (cleanMinisters.length !== ministers.length) { ministers = cleanMinisters; try { localStorage.setItem(storageKey, JSON.stringify(ministers)); } catch (_) {} }
       window.churchMinisters = ministers;
 
       const cards = document.getElementById('minister-cards');

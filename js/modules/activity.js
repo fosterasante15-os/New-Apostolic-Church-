@@ -37,7 +37,7 @@
       const getRows = () => [...document.querySelectorAll('#activity-rows tr')];
       const count = document.getElementById('activity-count');
       const notice = document.getElementById('activity-notice');
-      if (!form || !getRows().length) return;
+      if (!form || !count || !notice) return;
       function applyFilters() {
         const entity = form.elements.entity.value;
         const action = form.elements.action.value;
@@ -56,7 +56,7 @@
         });
         count.textContent = `${visible} ${visible === 1 ? 'record' : 'records'} shown`;
       }
-      form.addEventListener('submit', event => { event.preventDefault(); applyFilters(); notice.textContent = 'Filters applied to the local example events.'; });
+      form.addEventListener('submit', event => { event.preventDefault(); applyFilters(); notice.textContent = 'Filters applied to the live Supabase activity log.'; });
       form.addEventListener('change', applyFilters);
       form.addEventListener('reset', () => { setTimeout(() => { applyFilters(); notice.textContent = 'Filters cleared.'; }, 0); });
       document.getElementById('activity-export').addEventListener('click', () => {
@@ -68,7 +68,7 @@
         const link = document.createElement('a');
         link.href = url; link.download = 'church-activity-log.csv';
         document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
-        notice.textContent = `${data.length} filtered example event${data.length === 1 ? '' : 's'} exported as CSV.`;
+        notice.textContent = `${data.length} filtered live event${data.length === 1 ? '' : 's'} exported as CSV.`;
       });
       window.addEventListener('activity-refresh', applyFilters);
       applyFilters();
