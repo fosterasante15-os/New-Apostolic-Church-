@@ -267,7 +267,7 @@
     ministers: { store: STORES.ministers, newFirst: true, map: [['id','id'],['name','name'],['role','role'],
       ['note','bio'],['photo','photo'],['order','display_order','int']] },
     announcements: { store: STORES.announcements, newFirst: true, map: [['id','id'],['title','title'],['date','date'],['content','content']] },
-    activity: { store: STORES.activity, table: 'activity_logs', newFirst: true, map: [
+    activity: { store: STORES.activity, table: 'activity_logs', optional: true, newFirst: true, map: [
       ['id','id'],['at','at'],['entity','entity'],['action','action'],['userId','user_id'],['userName','user_name'],['role','role'],['summary','summary'],['data','data','json',{}]
     ] },
     // guests / visitors recorded on the Attendance page
@@ -478,7 +478,13 @@
       try { const r = await syncCollection(name); changed = changed || r.changed; }
       catch (e) {
         const text = String((e && (e.message || e.details)) || e);
-        if (COLLECTIONS[name].optional && /does not exist|schema cache|could not find the table|relation|PGRST205|42P01|404/i.test(text)) console.info('[Supabase Sync] optional table not set up yet:', COLLECTIONS[name].table);
+        if (COLLECTIONS[name].optional && /does not exist|schema cache|could not find the table|relation|PGRST205|42P01|404/i.test(text)) {
+          console.info('[Supabase Sync] optional table not set up yet:', COLLECTIONS[name].table);
+          if (name === 'activity') {
+            const notice = document.getElementById('activity-notice');
+            if (notice) notice.textContent = 'Activity Log cloud storage is not enabled yet. Run activity-log-migration.sql in Supabase SQL Editor; other records are syncing normally.';
+          }
+        }
         else errors.push(name + ': ' + text);
       }
     }
