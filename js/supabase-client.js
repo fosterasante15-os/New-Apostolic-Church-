@@ -376,7 +376,12 @@
       const L = localById.get(id), hasC = cloudById.has(id), s = S ? S[id] : undefined;
       if (L && hasC) {
         if (lh.get(id) === ch.get(id)) { finalItems.set(id, L); newSynced[id] = lh.get(id); }
-        else if (s === undefined) { finalItems.set(id, cItem.get(id)); newSynced[id] = ch.get(id); }          // first sight: cloud wins
+        else if (s === undefined) {
+          // A local record can be a valid edit made before the first sync
+          // completed. Do not replace it with an older cloud copy on login.
+          // The local version is uploaded and becomes the new sync baseline.
+          upserts.push(L); finalItems.set(id, L); newSynced[id] = lh.get(id);
+        }
         else if (lh.get(id) !== s) { upserts.push(L); finalItems.set(id, L); newSynced[id] = lh.get(id); }     // changed here: keep + upload
         else { finalItems.set(id, cItem.get(id)); newSynced[id] = ch.get(id); }                                // changed elsewhere: adopt
       } else if (L && !hasC) {

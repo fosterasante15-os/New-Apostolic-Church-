@@ -453,7 +453,7 @@
           <div class="heading-row"><div><h1>Ministers</h1><p style="margin:6px 0 0;color:var(--muted)">Upload a photo and a short note about each minister.</p></div><button class="primary-button" id="minister-add" type="button">＋ Add minister</button></div>
           <p class="announcement-notice" id="minister-notice" role="status" aria-live="polite"></p>
           <div class="managed-minister-grid" id="minister-cards" aria-label="Minister list"></div>
-          <p class="reconstruction-note">Names use placeholders based on the supplied snapshot. Add, edit, delete, and photo upload work only in this browser; nothing is sent to the live site or a server.</p>
+          <p class="reconstruction-note">Names use placeholders based on the supplied snapshot. Add, edit, delete, and photo upload are cached locally and synchronized with Supabase when online.</p>
         </section>
         <!-- Users page reconstructed from the supplied snapshot. Accounts are anonymized and browser-local. -->
         <section class="screen" id="users" aria-label="Users">
@@ -522,7 +522,7 @@
             </table></div>
             <div class="pagination"><span id="announcement-count">0 records</span><div class="page-controls"><button type="button" disabled>Previous</button><button type="button" disabled>Next</button></div></div>
           </section>
-          <p class="reconstruction-note">Add, edit, delete, and status filtering work in this browser. Changes are saved to this browser only and are not sent to the live website or a server.</p>
+          <p class="reconstruction-note">Add, edit, delete, and status filtering are cached locally and synchronized with Supabase when online.</p>
         </section>
         <!-- Add / edit announcement: full page form -->
         <section class="screen" id="announcement-new" aria-label="Add announcement">
