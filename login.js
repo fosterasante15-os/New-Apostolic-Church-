@@ -151,6 +151,9 @@
     const email = $('auth-email').value.trim().toLowerCase(), pw = $('auth-password').value;
     if (!email || !$('auth-email').checkValidity()) { message('Enter a valid email address.'); $('auth-email').focus(); return; }
     if (!pw || pw.length < 6) { message('Password must be at least 6 characters.'); $('auth-password').focus(); return; }
+    /* Weak, well-known passwords are refused on every device, for sign-in and for new registrations. */
+    const WEAK = ['12345678', '123456789', '1234567890', '123456', '11111111', 'admin123', 'admin', 'password', 'password1', 'password123', 'qwerty123'];
+    if (WEAK.includes(pw.toLowerCase())) { message('That password is not allowed because it is too easy to guess. Ask the Main Admin to set a new one.'); $('auth-password').focus(); return; }
     $('auth-submit').disabled = true;
 
     if (isRegisterMode) {
