@@ -7,11 +7,12 @@
       const STATUSES = ['present', 'late', 'absent', 'excused'];
       let draft = {}, draftKey = null;
 
-      const readAll = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } };
+      const readAll = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } };
       function members() {
-        if (Array.isArray(window.churchMembers)) return window.churchMembers;
-        try { const v = JSON.parse(localStorage.getItem(MEMBERS)); if (Array.isArray(v)) return v; } catch (_) {}
-        return [];
+        let list = [];
+        if (Array.isArray(window.churchMembers)) list = window.churchMembers;
+        else { try { const v = JSON.parse(localStorage.getItem(MEMBERS)); if (Array.isArray(v)) list = v; } catch (_) {} }
+        return list.filter(m => m.status !== 'Gone Soul');          /* Gone Souls are not on the attendance roster */
       }
       const serviceKey = () => eventSel ? eventSel.value : '';
       function loadDraft() { draftKey = serviceKey(); draft = { ...(readAll()[draftKey] || {}) }; }
@@ -90,8 +91,6 @@
       if (eventSel) eventSel.addEventListener('change', () => { loadDraft(); render(); syncCalendarToService(); });
       if (deptSel) deptSel.addEventListener('change', render);
       search.addEventListener('input', render);
-      window.addEventListener('members-change', () => { loadDraft(); render(); });
-      window.addEventListener('attendance-change', () => { loadDraft(); render(); });
-      window.addEventListener('services-change', () => { loadDraft(); render(); syncCalendarToService(); });
+      window.addEventListener('members-change', render);
       loadDraft(); render(); syncCalendarToService();
     })();
