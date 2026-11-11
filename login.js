@@ -61,6 +61,9 @@
           if (String(userStatus).toLowerCase() === 'pending') {
             throw new Error('Your registration is pending approval by the Main Admin. Please wait for an administrator to activate your account and assign your role.');
           }
+          if (String(userStatus).toLowerCase() === 'declined') {
+            throw new Error('Your registration was declined by the Main Admin. Please contact the Main Admin if you think this is a mistake.');
+          }
           if (String(userStatus).toLowerCase() !== 'active') {
             throw new Error('This account is inactive. Contact the main admin.');
           }
@@ -78,7 +81,8 @@
         }
       } catch (err) {
         console.log('[Supabase Auth fallback]', err.message);
-        if (/pending approval|inactive|Member accounts/i.test(err.message)) throw err;
+        if (/not confirmed/i.test(err.message || '')) throw new Error('Please confirm your email address using the link we sent you, then wait for the Main Admin to approve your account.');
+        if (/pending approval|inactive|declined|Member accounts/i.test(err.message)) throw err;
       }
     }
 
@@ -169,86 +173,19 @@
         $('auth-submit').disabled = false;
         return;
       }
-      const list = readJson(USERS_KEY, []);
-      const existing = Array.isArray(list) && list.find(u => String(u.email).toLowerCase() === email);
-      if (existing) {
-        if (String(existing.status).toLowerCase() === 'pending') {
-          message('A registration for this email is already awaiting Main Admin approval.');
-        } else {
-          message('An account with this email already exists. Please sign in or contact the main admin.');
-        }
-        $('auth-submit').disabled = false;
-        return;
-      }
-
       try {
-        const newId = 'user-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        const newUser = {
-          id: newId,
-          email: email,
-          name: fullName,
-          role: 'member',
-          status: 'Pending',
-          lastLogin: '—',
-          registeredAt: new Date().toISOString()
-        };
-
-        const hash = await hashPw(newId, pw);
-        const c = creds();
-        c[newId] = hash;
-        localStorage.setItem(CRED_KEY, JSON.stringify(c));
-
-        const currentUsers = readJson(USERS_KEY, []);
-        const userArr = Array.isArray(currentUsers) ? currentUsers : [];
-        userArr.unshift(newUser);
-        localStorage.setItem(USERS_KEY, JSON.stringify(userArr));
-
-        const NOTICE_KEY = 'church-user-notices-v1';
-        const notices = readJson(NOTICE_KEY, []);
-        const noticeArr = Array.isArray(notices) ? notices : [];
-        noticeArr.unshift({
-          id: `n-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-          userId: MAIN.id,
-          type: 'registration_request',
-          title: 'New Account Registration Pending Approval',
-          message: `${fullName} (${email}) has registered and requested access. Go to the Users tab to review and assign their role.`,
-          at: new Date().toISOString(),
-          data: { candidateId: newId, email, name: fullName }
-        });
-        localStorage.setItem(NOTICE_KEY, JSON.stringify(noticeArr.slice(-100)));
-        try { window.dispatchEvent(new CustomEvent('user-notices-change')); } catch (_) {}
-
-        const PROF_KEY = 'church-profiles-v1';
-        const allProfiles = readJson(PROF_KEY, {});
-        allProfiles[newId] = { name: fullName };
-        localStorage.setItem(PROF_KEY, JSON.stringify(allProfiles));
-
-        if (window.ChurchDB && window.ChurchDB.client) {
-          try {
-            await window.ChurchDB.signUp(email, pw, { name: fullName, role: 'member', status: 'Pending' });
-          } catch (cloudErr) {
-            console.log('[Supabase Cloud sync]', cloudErr.message);
-          }
-        }
-
-        logActivity({
-          action: 'registration-requested',
-          userId: newId,
-          userName: fullName,
-          role: 'pending',
-          summary: `Registration requested for ${fullName} (${email}) - pending approval`,
-          data: { email, name: fullName }
-        });
-
-        message('Registration submitted! Your account is pending Main Admin approval. You will have access once your role is assigned.', true);
+        if (!(window.ChurchDB && window.ChurchDB.client)) throw new Error('Registration needs an internet connection. Please try again when you are online.');
+        /* Creates the account (status Pending) AND the approval request online, so the Main Admin receives it at once on any device. */
+        const result = await window.ChurchDB.registerAccount({ email, password: pw, name: fullName });
+        logActivity({ action: 'registration-requested', userId: result.userId, userName: fullName, role: 'pending', summary: `Registration requested for ${fullName} (${email}) - pending approval`, data: { email, name: fullName } });
+        message(result.requestSent
+          ? 'Registration submitted! The Main Admin has been notified. You can sign in once your account is approved.'
+          : 'Your account was created, but the approval request could not be sent yet. Please keep this page open on a working internet connection; it will be sent automatically.', true);
         $('auth-email').value = '';
         $('auth-password').value = '';
         if (nameInput) nameInput.value = '';
         isRegisterMode = false;
-        if (nameWrap) {
-          nameWrap.hidden = true;
-          nameWrap.style.display = 'none';
-        }
+        if (nameWrap) { nameWrap.hidden = true; nameWrap.style.display = 'none'; }
         if (nameInput) nameInput.required = false;
         $('auth-submit').textContent = 'Sign in';
         if (toggleBtn) toggleBtn.textContent = 'Need an account? Register for access';
