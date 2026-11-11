@@ -20,40 +20,15 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 
 -- 1. Profiles (Linked to Supabase Auth users)
 CREATE TABLE public.profiles (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
   name TEXT,
-  role TEXT DEFAULT 'member' CHECK (role IN ('main-admin', 'admin', 'account', 'member')),
-  status TEXT DEFAULT 'Pending' CHECK (status IN ('Active', 'Pending', 'Inactive', 'Locked', 'Blocked')),
+  role TEXT DEFAULT 'admin' CHECK (role IN ('main-admin', 'admin', 'account', 'member')),
+  status TEXT DEFAULT 'Active',
   photo_url TEXT,
   last_login TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
--- Trigger to automatically populate public.profiles when a user registers
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, name, role, status)
-  VALUES (
-    new.id::text,
-    new.email,
-    COALESCE(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    COALESCE(new.raw_user_meta_data->>'role', 'member'),
-    COALESCE(new.raw_user_meta_data->>'status', 'Pending')
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    name = COALESCE(EXCLUDED.name, public.profiles.name),
-    role = COALESCE(EXCLUDED.role, public.profiles.role),
-    status = COALESCE(EXCLUDED.status, public.profiles.status);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- 2. Departments
 CREATE TABLE public.departments (
@@ -149,10 +124,8 @@ CREATE TABLE public.thanksgiving (
   amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
   member_id TEXT,
   member_name TEXT,
-  giver TEXT,
   location TEXT,
   notes TEXT,
-  note TEXT,
   recorded_by JSONB,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -164,7 +137,6 @@ CREATE TABLE public.ministers (
   title TEXT,
   role TEXT,
   bio TEXT,
-  note TEXT,
   photo TEXT,
   display_order INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -174,13 +146,9 @@ CREATE TABLE public.ministers (
 CREATE TABLE public.announcements (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
-  content TEXT,
-  status TEXT DEFAULT 'draft',
   category TEXT,
   date TEXT,
-  sms_status TEXT DEFAULT 'not-sent',
-  sms_count INT DEFAULT 0,
-  sms_at TIMESTAMPTZ,
+  content TEXT,
   audience TEXT,
   pinned BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -273,44 +241,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ==============================================================================
--- AUTOMATIC ADMIN USER IN AUTH.USERS (Password: admin123)
+-- MAIN ADMIN LOGIN
+-- No admin account or default password is created here. To create or reset the Main Admin,
+-- open register-foster-admin.sql, type your own password into the editor, and run it.
 -- ==============================================================================
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-DO $$
-DECLARE
-  new_admin_id UUID := gen_random_uuid();
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM auth.users WHERE email = 'fosterasante15@gmail.com') THEN
-    INSERT INTO auth.users (
-      instance_id,
-      id,
-      aud,
-      role,
-      email,
-      encrypted_password,
-      email_confirmed_at,
-      raw_app_meta_data,
-      raw_user_meta_data,
-      created_at,
-      updated_at
-    ) VALUES (
-      '00000000-0000-0000-0000-000000000000',
-      new_admin_id,
-      'authenticated',
-      'authenticated',
-      'fosterasante15@gmail.com',
-      crypt('admin123', gen_salt('bf')),
-      now(),
-      '{"provider":"email","providers":["email"]}'::jsonb,
-      '{"name":"Main Admin","role":"main-admin"}'::jsonb,
-      now(),
-      now()
-    );
-
-    INSERT INTO public.profiles (id, email, name, role, status)
-    VALUES (new_admin_id, 'fosterasante15@gmail.com', 'Main Admin', 'main-admin', 'Active')
-    ON CONFLICT (id) DO NOTHING;
-  END IF;
-END $$;

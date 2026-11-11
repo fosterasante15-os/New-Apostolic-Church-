@@ -1,6 +1,7 @@
 -- ==============================================================================
 -- Register / Update "Foster Admin" in Supabase Auth & Profiles
 -- Run this in your Supabase SQL Editor (supabase.com -> SQL Editor -> New Query)
+-- IMPORTANT: type your password into the editor only. Never save a real password in GitHub.
 -- ==============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -8,11 +9,15 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 DO $$
 DECLARE
   v_email TEXT := 'fosterasante15@gmail.com';
-  v_password TEXT := 'admin123'; -- You can change this to any password you want
+  v_password TEXT := 'TYPE-YOUR-NEW-PASSWORD-HERE'; -- replace the text between the quotes with your real password (min. 8 characters)
   v_name TEXT := 'Foster Asante';
   v_role TEXT := 'main-admin';
   v_user_id UUID;
 BEGIN
+  IF v_password = 'TYPE-YOUR-NEW-PASSWORD-HERE' OR length(v_password) < 8 THEN
+    RAISE EXCEPTION 'Put your real password (at least 8 characters) in v_password before running this script.';
+  END IF;
+
   -- 1. Check if user already exists in auth.users
   SELECT id INTO v_user_id FROM auth.users WHERE email = v_email;
 
