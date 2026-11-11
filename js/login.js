@@ -1,7 +1,7 @@
 (() => {
   const USERS_KEY = 'church-reconstruction-users-v1', CRED_KEY = 'church-credentials-v1', AUTH_KEY = 'church-auth-v1', SETTINGS_KEY = 'church-reconstruction-settings-v1';
-  /* Built-in main admin account. Only a SHA-256 fingerprint of the password is stored here, never the password itself. */
-  const MAIN = { id: 'user-main-admin', email: 'fosterasante15@gmail.com', name: 'Main Admin', role: 'main-admin', status: 'Active', hash: '9c38117b906e1e78d8314d24390770440fb139011db0b5201e065b5bba417731' };
+  /* Built-in main admin account. NO password (or password fingerprint) is stored in this file: the password lives in Supabase Auth. */
+  const MAIN = { id: 'user-main-admin', email: 'fosterasante15@gmail.com', name: 'Main Admin', role: 'main-admin', status: 'Active' };
   const $ = id => document.getElementById(id);
   const params = new URLSearchParams(location.search);
   const from = params.get('from');
@@ -9,61 +9,7 @@
   const message = (text, ok) => { $('auth-message').textContent = text; $('auth-message').classList.toggle('ok', Boolean(ok)); };
   const readJson = (k, fallback) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fallback; } catch (_) { return fallback; } };
   const creds = () => { const v = readJson(CRED_KEY, {}); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; };
-  function sha256Fallback(ascii) {
-    const rightRotate = (value, amount) => (value >>> amount) | (value << (32 - amount));
-    const mathPow = Math.pow, maxWord = mathPow(2, 32);
-    let result = '';
-    const words = [], asciiBitLength = ascii.length * 8;
-    let hash = [], k = [];
-    let primeCounter = 0;
-    const isComposite = {};
-    for (let candidate = 2; primeCounter < 64; candidate++) {
-      if (!isComposite[candidate]) {
-        for (let i = 0; i < 313; i += candidate) isComposite[i] = candidate;
-        hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
-        k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
-      }
-    }
-    ascii += '\x80';
-    while ((ascii.length % 64) - 56) ascii += '\x00';
-    for (let i = 0; i < ascii.length; i++) {
-      const j = ascii.charCodeAt(i);
-      words[i >> 2] |= j << ((3 - (i % 4)) * 8);
-    }
-    words[words.length] = (asciiBitLength / maxWord) | 0;
-    words[words.length] = asciiBitLength;
-    for (let j = 0; j < words.length;) {
-      const w = words.slice(j, (j += 16)), oldHash = hash.slice(0);
-      for (let i = 0; i < 64; i++) {
-        const w15 = w[i - 15], w2 = w[i - 2];
-        const a = hash[0], e = hash[4];
-        const temp1 = hash[7] + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) + ((e & hash[5]) ^ (~e & hash[6])) + k[i] + (w[i] = i < 16 ? w[i] : (w[i - 16] + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | 0);
-        const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
-        hash = [(temp1 + temp2) | 0].concat(hash);
-        hash[4] = (hash[4] + temp1) | 0;
-        hash.pop();
-      }
-      for (let i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
-    }
-    for (let i = 0; i < 8; i++) {
-      for (let j = 3; j + 1; j--) {
-        const b = (hash[i] >> (j * 8)) & 255;
-        result += (b < 16 ? 0 : '') + b.toString(16);
-      }
-    }
-    return result;
-  }
-
-  const hashPw = async (id, pw) => {
-    const bytes = new TextEncoder().encode(`church-v1|${id}|${pw}`);
-    if (window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function') {
-      const buf = await window.crypto.subtle.digest('SHA-256', bytes);
-      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    return sha256Fallback(binary);
-  };
+  const hashPw = async (id, pw) => { if (!(window.crypto && crypto.subtle)) throw new Error('Secure sign-in needs https or localhost.'); const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`church-v1|${id}|${pw}`)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); };
   const ACT_KEY = 'church-activity-v1';
   function logActivity(entry) {
     try {
@@ -82,24 +28,8 @@
     } catch (_) {}
   }
 
-  const AUTH_ROLES = ['admin', 'main-admin', 'account'];
-  let signedIn = null;
-  try { signedIn = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch (_) {}
-  const isExpired = sess => {
-    if (!sess || typeof sess !== 'object') return true;
-    const rawExp = sess.expiresAt ?? sess.expires_at;
-    if (!rawExp) return false;
-    const exp = typeof rawExp === 'number' ? (rawExp < 1e12 ? rawExp * 1000 : rawExp) : Date.parse(rawExp);
-    return !Number.isNaN(exp) && exp <= Date.now();
-  };
-  const hasValidRole = signedIn && typeof signedIn === 'object' && !isExpired(signedIn) && AUTH_ROLES.includes(String(signedIn.role || '').toLowerCase());
-  if (hasValidRole && !params.has('loggedout')) {
-    location.replace(HOME);
-    return;
-  }
-  if (signedIn && !hasValidRole) {
-    try { sessionStorage.removeItem(AUTH_KEY); } catch (_) {}
-  }
+  let signedIn = null; try { signedIn = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch (_) {}
+  if (signedIn && signedIn.role && !params.has('loggedout')) { location.replace(HOME); return; }
   if (params.has('loggedout')) message('You have been logged out.', true);
 
   /* The login identity always uses the church logo; the Settings logo is for the administration workspace. */
@@ -153,10 +83,10 @@
     }
 
     // 2. Fallback to local admin / registered credentials
-    const DEFAULT_PASSWORDS = ['admin123', 'admin', 'password', 'password123', '12345678'];
+    /* There are no built-in or default passwords. This offline fallback only accepts a password that was set on THIS device
+       through Users -> Reset password. Everyone else signs in through Supabase Auth above. */
     const changed = creds()[MAIN.id];
-    const masterHashMatch = (await hashPw(MAIN.id, pw)) === (changed || MAIN.hash);
-    const isMaster = masterHashMatch || (!changed && DEFAULT_PASSWORDS.includes(pw));
+    const isMaster = Boolean(changed) && (await hashPw(MAIN.id, pw)) === changed;
 
     if (email === MAIN.email) {
       return isMaster ? { id: MAIN.id, email: MAIN.email, name: MAIN.name, role: MAIN.role, status: MAIN.status } : null;
@@ -166,8 +96,7 @@
     const user = Array.isArray(list) && list.find(u => String(u.email).toLowerCase() === email);
     if (user) {
       const userHashMatch = creds()[user.id] && creds()[user.id] === (await hashPw(user.id, pw));
-      const userDefaultMatch = !creds()[user.id] && DEFAULT_PASSWORDS.includes(pw);
-      if (!userHashMatch && !userDefaultMatch) return null;
+      if (!userHashMatch) return null;
       if (String(user.status || '').toLowerCase() === 'pending') {
         throw new Error('Your registration is pending approval by the Main Admin. Please wait for an administrator to activate your account and assign your role.');
       }
@@ -222,6 +151,9 @@
     const email = $('auth-email').value.trim().toLowerCase(), pw = $('auth-password').value;
     if (!email || !$('auth-email').checkValidity()) { message('Enter a valid email address.'); $('auth-email').focus(); return; }
     if (!pw || pw.length < 6) { message('Password must be at least 6 characters.'); $('auth-password').focus(); return; }
+    /* Weak, well-known passwords are refused on every device, for sign-in and for new registrations. */
+    const WEAK = ['12345678', '123456789', '1234567890', '123456', '11111111', 'admin123', 'admin', 'password', 'password1', 'password123', 'qwerty123'];
+    if (WEAK.includes(pw.toLowerCase())) { message('That password is not allowed because it is too easy to guess. Ask the Main Admin to set a new one.'); $('auth-password').focus(); return; }
     $('auth-submit').disabled = true;
 
     if (isRegisterMode) {
@@ -293,16 +225,7 @@
 
         if (window.ChurchDB && window.ChurchDB.client) {
           try {
-            const authRes = await window.ChurchDB.signUp(email, pw, { name: fullName, role: 'member', status: 'Pending' });
-            const cloudId = authRes?.user?.id || newId;
-            await window.ChurchDB.client.from('profiles').upsert({
-              id: String(cloudId),
-              email: email,
-              name: fullName,
-              role: 'member',
-              status: 'Pending',
-              created_at: new Date().toISOString()
-            });
+            await window.ChurchDB.signUp(email, pw, { name: fullName, role: 'member', status: 'Pending' });
           } catch (cloudErr) {
             console.log('[Supabase Cloud sync]', cloudErr.message);
           }
