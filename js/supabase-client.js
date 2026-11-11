@@ -20,6 +20,7 @@
 
   const STORES = {
     profiles: 'church-profiles-v1',
+    guests: 'church-guests-v1',
     members: 'church-members-v1',
     departments: 'church-departments-v1',
     services: 'church-services-v1',
@@ -111,6 +112,69 @@
     },
 
 
+
+    // ----------------------------------------------------
+    // REGISTRATION + APPROVAL REQUESTS (stored online so the Main Admin gets them on any device)
+    // ----------------------------------------------------
+    async sendRegistrationRequest({ userId, email, name }) {
+      if (!client) return false;
+      const dupe = e => e && (e.code === '23505' || /duplicate key/i.test(String(e.message || '')));
+      let ok = true;
+      const prof = await client.from('profiles').insert({ id: userId, email, name, role: 'member', status: 'Pending' });
+      if (prof.error && !dupe(prof.error)) { ok = false; console.warn('[Registration] profile:', prof.error.message); }
+      const req = await client.from('registration_requests').insert({ id: 'req-' + userId, user_id: userId, email, name, status: 'Pending' });
+      if (req.error && !dupe(req.error)) { ok = false; console.warn('[Registration] request:', req.error.message); }
+      return ok;
+    },
+
+    async registerAccount({ email, password, name }) {
+      if (!client) throw new Error('Registration needs an internet connection. Please try again when you are online.');
+      email = String(email || '').trim().toLowerCase();
+      const exists = new Error('An account with this email already exists. Please sign in, or contact the Main Admin if your registration is still waiting.');
+      const { data, error } = await client.auth.signUp({ email, password, options: { data: { name, role: 'member', status: 'Pending' } } });
+      if (error) { if (/already|registered|exists/i.test(String(error.message || ''))) throw exists; throw new Error(error.message || 'Registration failed.'); }
+      const user = data && data.user;
+      if (!user || !user.id || (Array.isArray(user.identities) && user.identities.length === 0)) throw exists;
+      const pending = { userId: user.id, email, name };
+      let sent = false;
+      try { sent = await this.sendRegistrationRequest(pending); } catch (_) { sent = false; }
+      if (!sent) { try { const q = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); q.push(pending); rawSetItem(OUTBOX_KEY, JSON.stringify(q)); } catch (_) {} }
+      try { if (data.session) await client.auth.signOut(); } catch (_) {}      /* a not-yet-approved person is never left signed in */
+      return { userId: user.id, requestSent: sent };
+    },
+
+    async flushRegistrationOutbox() {
+      if (!client) return;
+      let q = []; try { q = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); } catch (_) {}
+      if (!Array.isArray(q) || !q.length) return;
+      const left = [];
+      for (const item of q) { let ok = false; try { ok = await this.sendRegistrationRequest(item); } catch (_) {} if (!ok) left.push(item); }
+      try { rawSetItem(OUTBOX_KEY, JSON.stringify(left)); } catch (_) {}
+    },
+
+    async listRegistrationRequests() {
+      if (!client) throw new Error('Supabase client is not available.');
+      const { data, error } = await client.from('registration_requests').select('*').order('created_at', { ascending: false }).limit(200);
+      if (error) throw error;
+      return data || [];
+    },
+
+    async decideRegistration({ email, approve, role, decidedBy }) {
+      if (!client) throw new Error('Supabase client is not available.');
+      email = String(email || '').trim().toLowerCase();
+      const patch = approve ? { role, status: 'Active' } : { status: 'Declined' };
+      const prof = await client.from('profiles').update(patch).eq('email', email).select('id');
+      if (prof.error) throw prof.error;
+      if (!prof.data || !prof.data.length) throw new Error('No online account was found for ' + email + '. Ask the person to register again.');
+      const req = await client.from('registration_requests').update({ status: approve ? 'Approved' : 'Declined', role: approve ? role : null, decided_by: decidedBy || null, decided_at: new Date().toISOString() }).eq('email', email).eq('status', 'Pending').select('id');
+      if (req.error) throw req.error;
+      return true;
+    },
+
+    watchRegistrations(callback) {
+      try { if (client && client.channel) client.channel('registration-requests').on('postgres_changes', { event: '*', schema: 'public', table: 'registration_requests' }, () => callback()).subscribe(); } catch (_) {}
+    },
+
     // ----------------------------------------------------
     // MANUAL BUTTONS (Settings page) - both just run a full two-way sync
     // ----------------------------------------------------
@@ -178,6 +242,7 @@
   const nativeSetItem = Storage.prototype.setItem;               // captured BEFORE we patch it
   const rawSetItem = (k, v) => nativeSetItem.call(window.localStorage, k, v);
   const META_KEY = 'church-sync-meta-v1';
+  const OUTBOX_KEY = 'church-registration-outbox-v1';
 
   const txt = (v, d) => (v === undefined || v === null) ? (d === undefined ? '' : d) : String(v);
   const COLLECTIONS = {
@@ -202,6 +267,8 @@
     ministers: { store: STORES.ministers, newFirst: true, map: [['id','id'],['name','name'],['role','role'],
       ['note','bio'],['photo','photo'],['order','display_order','int']] },
     announcements: { store: STORES.announcements, newFirst: true, map: [['id','id'],['title','title'],['date','date'],['content','content']] },
+    // guests / visitors recorded on the Attendance page
+    guests: { store: STORES.guests, table: 'guests', optional: true, newFirst: true, map: [['id','id'],['serviceKey','service_key'],['date','date'],['name','name'],['phone','phone'],['place','place'],['invitedBy','invited_by'],['note','note']] },
     // account profiles (display name + photo), keyed by e-mail: { "name@x.com": { name, photo } }
     profiles: { store: STORES.profiles, table: 'user_profiles', optional: true, kind: 'map', map: [['id','id'],['name','name'],['photo','photo']],
       toItems: parsed => Object.keys(parsed || {}).filter(k => parsed[k] && typeof parsed[k] === 'object').map(k => Object.assign({ id: k }, parsed[k])),
@@ -458,7 +525,8 @@
     const res = await syncAll();
     afterSync(res, { force: true });
   });
-  window.addEventListener('online', () => scheduleSync(1500));
+  document.addEventListener('DOMContentLoaded', () => { try { DB.flushRegistrationOutbox(); } catch (_) {} });
+  window.addEventListener('online', () => { scheduleSync(1500); try { DB.flushRegistrationOutbox(); } catch (_) {} });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSync(1500); });
   window.ChurchDB = DB;
 })();

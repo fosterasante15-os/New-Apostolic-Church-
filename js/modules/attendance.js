@@ -34,7 +34,8 @@
         const c = { present: 0, late: 0, absent: 0, excused: 0 };
         list.forEach(m => { c[statusOf(m.id)]++; });
         const saved = readAll()[draftKey] ? ' · saved before' : '';
-        summary.textContent = `${list.length} member${list.length === 1 ? '' : 's'} shown · Present ${c.present} · Late ${c.late} · Absent ${c.absent} · Excused ${c.excused}${saved}`;
+        const gn = guestsFor(draftKey).length;
+        summary.textContent = `${list.length} member${list.length === 1 ? '' : 's'} shown · Present ${c.present} · Late ${c.late} · Absent ${c.absent} · Excused ${c.excused} · Guests ${gn}${saved}`;
       }
 
       function visible() {
@@ -44,6 +45,7 @@
       }
 
       function render() {
+        renderGuests();
         if (serviceKey() !== draftKey) loadDraft();
         const list = visible(); body.replaceChildren();
         if (!list.length) {
@@ -88,6 +90,84 @@
         catch (_) { window.notify && window.notify('Could not save in browser storage.', 'error'); }
         render();
       });
+
+      /* ---- Guests / visitors: recorded for each Sunday, kept in their own list ---- */
+      const GKEY = 'church-guests-v1';
+      const guestRows = $('guest-rows'), guestSummary = $('guest-summary'), guestDialog = $('guest-dialog'), guestForm = $('guest-form');
+      let guestShowAll = false, guestEditing = null;
+      const readGuests = () => { try { const v = JSON.parse(localStorage.getItem(GKEY)); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+      const writeGuests = list => { try { localStorage.setItem(GKEY, JSON.stringify(list)); return true; } catch (_) { window.notify && window.notify('Could not save in browser storage.', 'error'); return false; } };
+      function guestsFor(key) { return readGuests().filter(g => g.serviceKey === key); }
+      const dateOf = key => String(key || '').split(' · ')[0];
+      const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+      function renderGuests() {
+        if (!guestRows) return;
+        const key = serviceKey(), all = readGuests();
+        const list = (guestShowAll ? all : all.filter(g => g.serviceKey === key)).slice()
+          .sort((x, y) => guestShowAll ? ((y.date || '').localeCompare(x.date || '') || (x.name || '').localeCompare(y.name || '')) : (x.name || '').localeCompare(y.name || ''));
+        guestRows.replaceChildren();
+        $('guest-date-th').hidden = !guestShowAll;
+        $('guest-toggle-all').textContent = guestShowAll ? 'This Sunday only' : 'All Sundays';
+        guestSummary.textContent = guestShowAll
+          ? `${plural(all.length, 'guest')} recorded across ${plural(new Set(all.map(g => g.date)).size, 'Sunday')}`
+          : `${plural(list.length, 'guest')} on ${dateOf(key) || 'this Sunday'}`;
+        if (!list.length) {
+          const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = guestShowAll ? 6 : 5; td.className = 'quick-note'; td.style.padding = '20px';
+          td.textContent = guestShowAll ? 'No guests have been recorded yet.' : 'No guests recorded for this Sunday yet. Tap “Add guest” when someone visits.';
+          tr.append(td); guestRows.append(tr); return;
+        }
+        list.forEach(g => {
+          const tr = document.createElement('tr'); tr.dataset.guestId = g.id;
+          const first = document.createElement('td'), strong = document.createElement('strong'); strong.textContent = g.name || '—'; first.append(strong);
+          if (g.note) { const n = document.createElement('div'); n.className = 'quick-note'; n.style.marginTop = '2px'; n.textContent = g.note; first.append(n); }
+          const cells = [first];
+          [g.phone, g.place, g.invitedBy].forEach(v => { const td = document.createElement('td'); td.textContent = v || '—'; cells.push(td); });
+          if (guestShowAll) { const td = document.createElement('td'); td.textContent = g.date || '—'; cells.push(td); }
+          const actions = document.createElement('td'), group = document.createElement('div'); group.className = 'row-actions';
+          const edit = document.createElement('button'); edit.type = 'button'; edit.dataset.guestAction = 'edit'; edit.textContent = 'Edit';
+          const del = document.createElement('button'); del.type = 'button'; del.dataset.guestAction = 'delete'; del.className = 'delete'; del.textContent = 'Remove';
+          group.append(edit, del); actions.append(group); cells.push(actions);
+          tr.append(...cells); guestRows.append(tr);
+        });
+      }
+
+      function openGuest(g) {
+        guestEditing = g || null;
+        $('guest-dialog-title').textContent = g ? 'Edit guest' : 'Add guest';
+        $('guest-service-label').textContent = `Sunday service: ${g ? g.serviceKey : serviceKey()}`;
+        $('guest-name').value = g ? g.name || '' : ''; $('guest-phone').value = g ? g.phone || '' : '';
+        $('guest-place').value = g ? g.place || '' : ''; $('guest-invited').value = g ? g.invitedBy || '' : ''; $('guest-note').value = g ? g.note || '' : '';
+        if (guestDialog.showModal) guestDialog.showModal(); else guestDialog.setAttribute('open', '');
+        $('guest-name').focus();
+      }
+
+      $('guest-add')?.addEventListener('click', () => openGuest(null));
+      $('guest-cancel')?.addEventListener('click', () => guestDialog.close());
+      $('guest-toggle-all')?.addEventListener('click', () => { guestShowAll = !guestShowAll; renderGuests(); });
+      guestForm?.addEventListener('submit', event => {
+        event.preventDefault();
+        const name = $('guest-name').value.trim();
+        if (!name) { $('guest-name').focus(); return; }
+        const values = { name, phone: $('guest-phone').value.trim(), place: $('guest-place').value.trim(), invitedBy: $('guest-invited').value.trim(), note: $('guest-note').value.trim() };
+        const all = readGuests();
+        let next;
+        if (guestEditing) next = all.map(g => g.id === guestEditing.id ? { ...g, ...values } : g);
+        else {
+          const key = serviceKey();
+          next = [{ id: `g-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, serviceKey: key, date: dateOf(key), ...values, createdAt: new Date().toISOString() }, ...all];
+        }
+        if (!writeGuests(next)) return;
+        guestDialog.close(); render();
+        window.notify && window.notify(guestEditing ? `${name} updated.` : `${name} added as a guest.`, 'success', 'Guest saved');
+      });
+      guestRows?.addEventListener('click', event => {
+        const button = event.target.closest('button[data-guest-action]'); if (!button) return;
+        const g = readGuests().find(x => x.id === button.closest('tr')?.dataset.guestId); if (!g) return;
+        if (button.dataset.guestAction === 'edit') openGuest(g);
+        if (button.dataset.guestAction === 'delete' && window.confirm(`Remove ${g.name} from the guest list?`)) { writeGuests(readGuests().filter(x => x.id !== g.id)); render(); }
+      });
+
       if (eventSel) eventSel.addEventListener('change', () => { loadDraft(); render(); syncCalendarToService(); });
       if (deptSel) deptSel.addEventListener('change', render);
       search.addEventListener('input', render);

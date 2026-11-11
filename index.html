@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="NAC Kumasi">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#123d55">
-  <link rel="stylesheet" href="css/styles.css?v=20261114">
+  <link rel="stylesheet" href="css/styles.css?v=20261115">
   <script>
     /* Theme is applied before first paint so the page never flashes the wrong colours. */
     (function () { try { var t = localStorage.getItem('church-theme-v1'); document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); } catch (_) { document.documentElement.setAttribute('data-theme', 'light'); } })();
@@ -435,6 +435,16 @@
             </table></div>
             <div style="padding:15px 17px;border-top:1px solid var(--line)"><button class="primary-button" id="attendance-save" type="button">Save attendance</button></div>
           </section>
+          <section class="table-card" id="guest-card" aria-label="Guests and visitors" style="margin-top:18px">
+            <div class="guest-head">
+              <div><h2 style="margin:0;font-size:18px">Guests</h2><p class="quick-note" id="guest-summary" aria-live="polite" style="margin:2px 0 0"></p></div>
+              <div class="guest-actions"><button class="plain-button" id="guest-toggle-all" type="button">All Sundays</button><button class="primary-button" id="guest-add" type="button">＋ Add guest</button></div>
+            </div>
+            <div class="table-scroll"><table style="min-width:680px">
+              <thead><tr><th scope="col">Guest</th><th scope="col">Phone</th><th scope="col">Place of stay</th><th scope="col">Invited by</th><th scope="col" id="guest-date-th" hidden>Sunday</th><th scope="col" aria-label="Actions"></th></tr></thead>
+              <tbody id="guest-rows"></tbody>
+            </table></div>
+          </section>
           <p class="reconstruction-note">Every registered member appears here. Attendance is saved per Sunday service in this browser.</p>
         </section>
         <!-- Ministers page reconstructed from the supplied snapshot. These records are browser-local. -->
@@ -761,6 +771,18 @@
       <p style="margin:0;color:var(--muted);font-size:12.5px">Give the member their number. It is unique and will not be reused.</p></div>
     <div class="settings-dialog-actions" style="gap:10px"><button class="plain-button" id="member-success-copy" type="button">Copy ID</button><button class="primary-button" id="member-success-ok" type="button">Done</button></div>
   </dialog>
+  <dialog id="guest-dialog" aria-labelledby="guest-dialog-title">
+    <form class="dialog-form" id="guest-form">
+      <h2 id="guest-dialog-title">Add guest</h2>
+      <p class="upload-help" id="guest-service-label"></p>
+      <label for="guest-name">Full name<input id="guest-name" name="name" type="text" maxlength="120" autocomplete="off" required></label>
+      <label for="guest-phone">Phone<input id="guest-phone" name="phone" type="tel" inputmode="tel" maxlength="30" autocomplete="off"></label>
+      <label for="guest-place">Place of stay<input id="guest-place" name="place" type="text" maxlength="120" autocomplete="off"></label>
+      <label for="guest-invited">Invited by<input id="guest-invited" name="invited" type="text" maxlength="120" placeholder="Member who invited them (optional)" autocomplete="off"></label>
+      <label for="guest-note">Note<input id="guest-note" name="note" type="text" maxlength="200" placeholder="e.g. first time, came with family" autocomplete="off"></label>
+      <div class="dialog-actions"><button class="plain-button" id="guest-cancel" type="button">Cancel</button><button class="primary-button" id="guest-save" type="submit">Save guest</button></div>
+    </form>
+  </dialog>
   <dialog id="user-dialog" aria-labelledby="user-dialog-title">
     <form class="dialog-form" id="user-form">
       <h2 id="user-dialog-title">Add user</h2>
@@ -774,31 +796,31 @@
   </dialog>
   <!-- Supabase Cloud SDK & Data Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-  <script src="js/supabase-client.js?v=20261114"></script>
+  <script src="js/supabase-client.js?v=20261115"></script>
 
   <!-- Core Security & Infrastructure -->
-  <script src="js/access.js?v=20261114"></script>
-  <script src="js/notifications.js?v=20261114"></script>
-  <script src="js/slideshow.js?v=20261114"></script>
+  <script src="js/access.js?v=20261115"></script>
+  <script src="js/notifications.js?v=20261115"></script>
+  <script src="js/slideshow.js?v=20261115"></script>
 
   <!-- Business Modules -->
-  <script src="js/modules/departments.js?v=20261114"></script>
-  <script src="js/modules/services.js?v=20261114"></script>
-  <script src="js/modules/members.js?v=20261114"></script>
-  <script src="js/modules/momo.js?v=20261114"></script>
-  <script src="js/modules/dues.js?v=20261114"></script>
-  <script src="js/modules/offerings.js?v=20261114"></script>
-  <script src="js/modules/attendance.js?v=20261114"></script>
-  <script src="js/modules/ministers.js?v=20261114"></script>
-  <script src="js/modules/announcements.js?v=20261114"></script>
-  <script src="js/modules/users.js?v=20261114"></script>
-  <script src="js/modules/activity.js?v=20261114"></script>
-  <script src="js/modules/reports.js?v=20261114"></script>
-  <script src="js/modules/settings.js?v=20261114"></script>
-  <script src="js/modules/dashboard.js?v=20261114"></script>
+  <script src="js/modules/departments.js?v=20261115"></script>
+  <script src="js/modules/services.js?v=20261115"></script>
+  <script src="js/modules/members.js?v=20261115"></script>
+  <script src="js/modules/momo.js?v=20261115"></script>
+  <script src="js/modules/dues.js?v=20261115"></script>
+  <script src="js/modules/offerings.js?v=20261115"></script>
+  <script src="js/modules/attendance.js?v=20261115"></script>
+  <script src="js/modules/ministers.js?v=20261115"></script>
+  <script src="js/modules/announcements.js?v=20261115"></script>
+  <script src="js/modules/users.js?v=20261115"></script>
+  <script src="js/modules/activity.js?v=20261115"></script>
+  <script src="js/modules/reports.js?v=20261115"></script>
+  <script src="js/modules/settings.js?v=20261115"></script>
+  <script src="js/modules/dashboard.js?v=20261115"></script>
 
   <!-- UI Components (Profile, Account, Theme Toggle) -->
-  <script src="js/ui.js?v=20261114"></script>
-  <script src="js/pwa.js?v=20261114"></script>
+  <script src="js/ui.js?v=20261115"></script>
+  <script src="js/pwa.js?v=20261115"></script>
 </body>
 </html>

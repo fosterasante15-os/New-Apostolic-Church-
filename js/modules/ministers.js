@@ -1,10 +1,15 @@
 (() => {
       const storageKey = 'church-reconstruction-ministers-v1';
-      let ministers = [];
+      const seed = [
+        { id: 'seed-minister-001', order: 1, name: 'Minister 001', role: 'Congregational Rector', note: 'Leads worship and pastoral care for the congregation.', photo: '' },
+        { id: 'seed-minister-002', order: 2, name: 'Minister 002', role: "Women's Fellowship Leader", note: 'Supports the women of the congregation and helps coordinate fellowship gatherings.', photo: '' },
+        { id: 'seed-minister-003', order: 3, name: 'Minister 003', role: "Men's Fellowship Leader", note: 'Serves the men of the church and assists with Sunday service arrangements.', photo: '' }
+      ];
+      let ministers = seed;
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
         if (Array.isArray(saved)) ministers = saved;
-      } catch (_) {}
+      } catch (_) { /* Storage may be disabled; in-memory actions still work. */ }
       window.churchMinisters = ministers;
 
       const cards = document.getElementById('minister-cards');
@@ -33,30 +38,11 @@
       function resizePhoto(file) {
         return new Promise((resolve, reject) => {
           const url = URL.createObjectURL(file), img = new Image();
-          img.onload = async () => {
-            try {
-              const rawW = img.naturalWidth || img.width || 320;
-              const rawH = img.naturalHeight || img.height || 320;
-              const scale = Math.min(1, 600 / Math.max(1, rawW, rawH));
-              const w = Math.max(1, Math.round(rawW * scale));
-              const h = Math.max(1, Math.round(rawH * scale));
-              const c = document.createElement('canvas'); c.width = w; c.height = h;
-              const ctx = c.getContext('2d');
-              URL.revokeObjectURL(url);
-              if (!ctx) {
-                resolve(await readPhoto(file));
-                return;
-              }
-              ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-              const out = c.toDataURL('image/jpeg', 0.85);
-              if (!out || out === 'data:,') {
-                resolve(await readPhoto(file));
-                return;
-              }
-              resolve(out);
-            } catch (err) {
-              reject(err);
-            }
+          img.onload = () => {
+            const scale = Math.min(1, 600 / Math.max(img.width, img.height)), w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+            const c = document.createElement('canvas'); c.width = w; c.height = h;
+            const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+            URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', 0.85));
           };
           img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read this image. Choose a JPEG, PNG, or WebP photo.')); };
           img.src = url;
@@ -64,23 +50,10 @@
       }
       let editingId = null;
       let currentPhoto = '';
-      let photoProcessingPromise = null;
-      let isReloading = false;
 
       function persist() {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(ministers));
-          window.churchMinisters = ministers;
-          const prev = isReloading;
-          isReloading = true;
-          try {
-            window.dispatchEvent(new CustomEvent('ministers-change'));
-          } finally {
-            isReloading = prev;
-          }
-        } catch (_) {
-          notice.textContent = 'Changes work for this session but could not be saved in browser storage.';
-        }
+        try { localStorage.setItem(storageKey, JSON.stringify(ministers)); window.churchMinisters = ministers; window.dispatchEvent(new CustomEvent('ministers-change')); }
+        catch (_) { notice.textContent = 'Changes work for this session but could not be saved in browser storage.'; }
       }
       function button(label, action, className = '') {
         const el = document.createElement('button');
@@ -91,23 +64,11 @@
         cards.replaceChildren();
         sortedMinisters().forEach(minister => {
           const card = document.createElement('article'); card.className = 'managed-minister-card'; card.dataset.ministerId = minister.id;
-          const initials = String(minister.name || 'M').split(/\s+/).filter(Boolean).slice(0,2).map(part => part[0]).join('').toUpperCase() || 'M';
           if (minister.photo) {
-            const image = document.createElement('img');
-            image.className = 'managed-minister-photo';
-            image.src = minister.photo;
-            image.alt = `Photo of ${minister.name}`;
-            image.decoding = 'async';
-            image.addEventListener('error', () => {
-              const avatar = document.createElement('div');
-              avatar.className = 'minister-avatar';
-              avatar.textContent = initials;
-              image.replaceWith(avatar);
-            });
-            card.append(image);
+            const image = document.createElement('img'); image.className = 'managed-minister-photo'; image.src = minister.photo; image.alt = `Photo of ${minister.name}`; card.append(image);
           } else {
             const avatar = document.createElement('div'); avatar.className = 'minister-avatar';
-            avatar.textContent = initials;
+            avatar.textContent = minister.name.split(/\s+/).filter(Boolean).slice(0,2).map(part => part[0]).join('').toUpperCase() || 'M';
             card.append(avatar);
           }
           const name = document.createElement('h2'); name.textContent = minister.name;
@@ -151,27 +112,14 @@
       photoRemove.addEventListener('click', () => { currentPhoto = ''; photoInput.value = ''; showPhoto(); });
       photoInput.addEventListener('change', async () => {
         const file = photoInput.files?.[0]; if (!file) return;
-        const validType = /^image\/(jpe?g|png|webp)$/i.test(file.type || '') || /\.(jpe?g|png|webp)$/i.test(file.name || '');
-        if (!validType) { formError.textContent = 'Choose a JPEG, PNG, or WebP photo.'; photoInput.value = ''; return; }
+        if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { formError.textContent = 'Choose a JPEG, PNG, or WebP photo.'; photoInput.value = ''; return; }
         formError.textContent = '';
-        const p = resizePhoto(file).then(dataUrl => {
-          currentPhoto = dataUrl;
-          showPhoto();
-        }).catch(e => {
-          formError.textContent = e.message;
-        }).finally(() => {
-          if (photoProcessingPromise === p) photoProcessingPromise = null;
-        });
-        photoProcessingPromise = p;
-        await p;
+        try { currentPhoto = await resizePhoto(file); showPhoto(); } catch (e) { formError.textContent = e.message; }
         photoInput.value = '';
       });
       document.getElementById('minister-cancel').addEventListener('click', () => dialog.close());
       form.addEventListener('submit', async event => {
         event.preventDefault();
-        if (photoProcessingPromise) {
-          try { await photoProcessingPromise; } catch (_) {}
-        }
         const name = nameInput.value.trim();
         const role = roleInput.value.trim();
         const note = noteInput.value.trim();
@@ -182,14 +130,12 @@
         formError.textContent = '';
         saveButton.disabled = true;
         try {
-          const item = { name, role, note, photo: currentPhoto, order, updated_at: new Date().toISOString() };
+          const item = { name, role, note, photo: currentPhoto, order };
           if (editingId) {
-            window.ChurchDB?.unmarkTombstone?.('ministers', editingId);
             ministers = ministers.map(existing => existing.id === editingId ? { ...existing, ...item } : existing);
             notice.textContent = 'Minister updated.';
           } else {
             item.id = (crypto.randomUUID ? crypto.randomUUID() : `minister-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-            window.ChurchDB?.unmarkTombstone?.('ministers', item.id);
             ministers.unshift(item);
             notice.textContent = 'Minister added.';
           }
@@ -207,27 +153,8 @@
         if (action.dataset.action === 'edit') openDialog(minister);
         if (action.dataset.action === 'delete' && window.confirm(`Delete ${minister.name}?`)) {
           ministers = ministers.filter(item => item.id !== minister.id);
-          persist();
-          render();
-          notice.textContent = 'Minister deleted.';
-          window.ChurchDB?.deleteItem('ministers', minister.id);
+          persist(); render(); notice.textContent = 'Minister deleted.';
         }
       });
-      function reloadMinisters() {
-        if (isReloading) return;
-        isReloading = true;
-        try {
-          const saved = JSON.parse(localStorage.getItem(storageKey));
-          if (Array.isArray(saved)) {
-            ministers = saved;
-            window.churchMinisters = ministers;
-            render();
-          }
-        } catch (_) {} finally {
-          isReloading = false;
-        }
-      }
-      window.addEventListener('ministers-change', reloadMinisters);
-      window.addEventListener('storage', e => { if (e.key === storageKey) reloadMinisters(); });
       render();
     })();

@@ -9,12 +9,10 @@
       ].map(([name, description], i) => ({ id: `dept-seed-${i + 1}`, name, description }));
       let departments = seed;
       try {
-        const raw = localStorage.getItem(STORE);
-        if (raw !== null) {
-          const saved = JSON.parse(raw);
-          if (Array.isArray(saved)) {
-            departments = saved;
-          }
+        const saved = JSON.parse(localStorage.getItem(STORE));
+        if (Array.isArray(saved) && saved.length) {
+          const existing = new Set(saved.map(department => department.name));
+          departments = [...saved, ...seed.filter(department => !existing.has(department.name))];
         }
       } catch (_) {}
       window.churchDepartments = departments;
@@ -28,16 +26,14 @@
       const adminOnly = () => { if (isAdmin()) return true; notify('Only an admin can add, edit or delete departments.', 'error', 'Admin access needed'); return false; };
 
       /* Rebuild every department dropdown in the app (keeps the first "All…" option and the current choice). */
-      function fillSelects(emit = true) {
+      function fillSelects() {
         document.querySelectorAll('#member-dept-filter, #attendance-department, select[data-filter="department"]').forEach(sel => {
           const keep = sel.value, first = sel.options[0];
           [...sel.options].slice(1).forEach(o => o.remove());
           departments.forEach(d => sel.add(new Option(d.name, d.name)));
           sel.value = [...sel.options].some(o => o.value === keep) ? keep : first.value;
         });
-        if (emit !== false) {
-          window.dispatchEvent(new CustomEvent('departments-change', { detail: departments.map(d => d.name) }));
-        }
+        window.dispatchEvent(new CustomEvent('departments-change', { detail: departments.map(d => d.name) }));
       }
 
       function render() {
@@ -76,22 +72,16 @@
       form.addEventListener('submit', e => {
         e.preventDefault();
         if (!adminOnly()) return;
-        err.textContent = '';
         const name = f('department-name').value.trim().replace(/\s+/g, ' '), description = f('department-desc').value.trim();
         if (!name) { err.textContent = 'Please enter a department name.'; f('department-name').focus(); return; }
         if (departments.some(d => d.name.toLowerCase() === name.toLowerCase() && d.id !== editingId)) { err.textContent = `A department named “${name}” already exists.`; f('department-name').focus(); return; }
         if (editingId) {
           const old = departments.find(d => d.id === editingId);
-          window.ChurchDB?.unmarkTombstone?.('departments', editingId);
-          window.ChurchDB?.unmarkTombstone?.('departments', name);
           departments = departments.map(d => d.id === editingId ? { ...d, name, description } : d);
           if (old && old.name !== name) window.dispatchEvent(new CustomEvent('department-renamed', { detail: { from: old.name, to: name } }));
           notice.textContent = `Department “${name}” updated.`; notify(`Department “${name}” updated.`, 'success');
         } else {
-          const id = `dept-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-          window.ChurchDB?.unmarkTombstone?.('departments', id);
-          window.ChurchDB?.unmarkTombstone?.('departments', name);
-          departments.push({ id, name, description });
+          departments.push({ id: `dept-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name, description });
           notice.textContent = `Department “${name}” created.`; notify(`Department “${name}” created. It is now available when registering members.`, 'success', 'Department added');
         }
         persist(); fillSelects(); render(); location.hash = '#departments';
@@ -105,34 +95,11 @@
         const n = counts[d.name] || 0;
         if (n > 0) { notify(`“${d.name}” still has ${n} ${n === 1 ? 'member' : 'members'}. Move them to another department first.`, 'error', 'Cannot delete'); return; }
         if (window.confirm(`Delete the department “${d.name}”?`)) {
-          departments = departments.filter(x => x.id !== d.id);
-          persist();
-          fillSelects();
-          render();
-          notice.textContent = `Department “${d.name}” deleted.`;
-          window.ChurchDB?.deleteItem('departments', d.id || d.name);
+          departments = departments.filter(x => x.id !== d.id); persist(); fillSelects(); render(); notice.textContent = `Department “${d.name}” deleted.`;
         }
       });
 
       /* Member counts come from the members module. */
       window.addEventListener('members-change', e => { counts = {}; (e.detail || []).forEach(m => { window.memberDepartments(m).forEach(d => { counts[d] = (counts[d] || 0) + 1; }); }); render(); });
-      let isReloading = false;
-      function reloadDepartments() {
-        if (isReloading) return;
-        isReloading = true;
-        try {
-          const saved = JSON.parse(localStorage.getItem(STORE));
-          if (Array.isArray(saved)) {
-            departments = saved;
-            window.churchDepartments = departments;
-            fillSelects(false);
-            render();
-          }
-        } catch (_) {} finally {
-          isReloading = false;
-        }
-      }
-      window.addEventListener('departments-change', reloadDepartments);
-      window.addEventListener('storage', e => { if (e.key === STORE) reloadDepartments(); });
       fillSelects(); render(); onRoute();
     })();

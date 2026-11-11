@@ -13,7 +13,12 @@
       updateActiveNavigation();
 
       const storageKey = 'church-reconstruction-announcements-v1';
-      let announcements = [];
+      const seed = [
+        { id: 'seed-youth-retreat', title: 'Youth Retreat Registration', status: 'published', date: '2026-08-10' },
+        { id: 'seed-welcome-sunday', title: 'Welcome Sunday', status: 'published', date: '2026-08-01' },
+        { id: 'seed-easter-recap', title: 'Easter recap', status: 'archived', date: '2026-04-01' }
+      ];
+      let announcements = seed;
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey));
         if (Array.isArray(saved)) announcements = saved;
@@ -100,7 +105,7 @@
           const dateCell = document.createElement('td'); dateCell.textContent = item.date || '—';
           const actionCell = document.createElement('td');
           const actionGroup = document.createElement('div'); actionGroup.className = 'row-actions';
-          actionGroup.append(makeButton('Edit', 'edit'), ...(item.status === 'published' ? [makeButton(item.smsStatus === 'sent' || item.smsStatus === 'demo' ? 'Resend SMS' : 'Send SMS', 'sms'), makeButton('WhatsApp', 'wa')] : []), makeButton('Delete', 'delete', 'delete'));
+          actionGroup.append(makeButton('Edit', 'edit'), ...(item.status === 'published' ? [makeButton(item.smsStatus === 'sent' || item.smsStatus === 'demo' ? 'Resend SMS' : 'Send SMS', 'sms')] : []), makeButton('Delete', 'delete', 'delete'));
           actionCell.append(actionGroup); tr.append(titleCell,statusCell,dateCell,actionCell);
           tr.dataset.announcementId = item.id; rows.append(tr);
         });
@@ -151,45 +156,11 @@
         if (!item) return;
         if (!adminOnly()) return;
         if (button.dataset.action === 'sms') { sendSms(item); return; }
-        if (button.dataset.action === 'wa') {
-          const church = (document.querySelector('[data-church-name]')?.textContent || 'New Apostolic Church Kumasi Central').trim();
-          const text = `📢 *${item.title || ''}*\n\n${item.content || ''}\n\n📍 ${church}`;
-          const safeEncode = str => {
-            const raw = String(str ?? '');
-            const clean = typeof raw.toWellFormed === 'function'
-              ? raw.toWellFormed()
-              : raw.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
-            return encodeURIComponent(clean).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-          };
-          const waUrl = `https://wa.me/?text=${safeEncode(text)}`;
-          if (navigator.share) {
-            navigator.share({ title: item.title, text }).catch(() => {
-              window.open(waUrl, '_blank', 'noopener,noreferrer');
-            });
-          } else {
-            window.open(waUrl, '_blank', 'noopener,noreferrer');
-          }
-          return;
-        }
         if (button.dataset.action === 'edit') openDialog(item);
         if (button.dataset.action === 'delete' && window.confirm(`Delete “${item.title}”?`)) {
           announcements = announcements.filter(entry => entry.id !== item.id);
-          persist();
-          render();
-          notice.textContent = 'Announcement deleted.';
-          window.ChurchDB?.deleteItem('announcements', item.id);
+          persist(); render(); notice.textContent = 'Announcement deleted.';
         }
       });
-      function reloadAnnouncements() {
-        try {
-          const saved = JSON.parse(localStorage.getItem(storageKey));
-          if (Array.isArray(saved)) {
-            announcements = saved;
-            render();
-          }
-        } catch (_) {}
-      }
-      window.addEventListener('announcements-change', reloadAnnouncements);
-      window.addEventListener('storage', e => { if (e.key === storageKey) reloadAnnouncements(); });
       render();
     })();
