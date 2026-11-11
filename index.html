@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Church Management — Dashboard</title>
-  <link rel="stylesheet" href="css/styles.css?v=20261110">
+  <link rel="stylesheet" href="css/styles.css?v=20261111">
   <script>
     /* Theme is applied before first paint so the page never flashes the wrong colours. */
     (function () { try { var t = localStorage.getItem('church-theme-v1'); document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); } catch (_) { document.documentElement.setAttribute('data-theme', 'light'); } })();
@@ -154,7 +154,7 @@
         <!-- Members view retained from the earlier reconstruction. -->
         <section class="screen" id="members" aria-label="Members">
           <p class="breadcrumb"><a href="#dashboard">Dashboard</a><span>/</span>Members</p>
-          <div class="heading-row"><h1>Members</h1><button class="primary-button" id="member-add" type="button">＋ Add member</button></div>
+          <div class="heading-row"><h1 id="member-heading">Members</h1><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="plain-button" id="member-gone-toggle" type="button">Gone Souls (0)</button><button class="primary-button" id="member-add" type="button">＋ Add member</button></div></div>
           <form class="filters" id="member-filter" action="#members" method="get">
             <input class="filter-control" id="member-search" type="search" name="q" placeholder="Search by name, ID, phone or email" aria-label="Search members">
             <select class="filter-control" id="member-dept-filter" name="department" aria-label="Filter by department">
@@ -187,7 +187,7 @@
             <label for="member-phone">Phone<input id="member-phone" name="phone" type="tel" maxlength="30" autocomplete="off"></label>
             <label for="member-dob">Date of birth<input id="member-dob" name="dob" type="date"></label>
             <label for="member-joined">Join date<input id="member-joined" name="joined" type="date"></label>
-            <label for="member-status">Status<select id="member-status" name="status"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Transferred">Transferred</option></select></label>
+            <label for="member-status">Status<select id="member-status" name="status"><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Transferred">Transferred</option><option value="Gone Soul">Gone Soul</option></select></label>
             <label class="member-form-wide" for="member-place">Place of stay<input id="member-place" name="place" type="text" maxlength="120" autocomplete="off"><span class="field-hint">Town, suburb, or area where this member lives.</span></label>
             <label class="member-form-wide member-check" for="member-notify"><input id="member-notify" name="notify" type="checkbox" checked><span>Send a welcome message with the Member ID to the phone number above</span></label>
             <fieldset class="member-form-wide dept-picker" id="member-dept-picker"><legend>Departments</legend><p class="dept-picker-hint">Select every department this member belongs to. <strong id="member-dept-count">None selected</strong></p><div class="dept-picker-grid" id="member-dept-options"></div></fieldset>
@@ -622,7 +622,7 @@
           <div class="heading-row"><h1>Member report</h1><a class="outline-link report-back" href="#reports">← All reports</a></div>
           <form class="filters report-filter-form" data-report-filters>
             <label>Department<select class="filter-control" data-filter="department" id="member-report-department"><option value="all">All departments</option></select></label>
-            <label>Status<select class="filter-control" data-filter="status"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="transferred">Transferred</option></select></label>
+            <label>Status<select class="filter-control" data-filter="status"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="transferred">Transferred</option><option value="gone soul">Gone Soul</option></select></label>
             <label>Joined from<input class="filter-control" type="date" data-date-from></label>
             <label>Joined to<input class="filter-control" type="date" data-date-to></label>
             <button class="plain-button filter-submit" type="submit">Apply filters</button><button class="outline-link report-reset" type="button">Reset</button>
@@ -755,30 +755,30 @@
   </dialog>
   <!-- Supabase Cloud SDK & Data Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-  <script src="js/supabase-client.js?v=20261110"></script>
+  <script src="js/supabase-client.js?v=20261111"></script>
 
   <!-- Core Security & Infrastructure -->
-  <script src="js/access.js?v=20261110"></script>
-  <script src="js/notifications.js?v=20261110"></script>
-  <script src="js/slideshow.js?v=20261110"></script>
+  <script src="js/access.js?v=20261111"></script>
+  <script src="js/notifications.js?v=20261111"></script>
+  <script src="js/slideshow.js?v=20261111"></script>
 
   <!-- Business Modules -->
-  <script src="js/modules/departments.js?v=20261110"></script>
-  <script src="js/modules/services.js?v=20261110"></script>
-  <script src="js/modules/members.js?v=20261110"></script>
-  <script src="js/modules/momo.js?v=20261110"></script>
-  <script src="js/modules/dues.js?v=20261110"></script>
-  <script src="js/modules/offerings.js?v=20261110"></script>
-  <script src="js/modules/attendance.js?v=20261110"></script>
-  <script src="js/modules/ministers.js?v=20261110"></script>
-  <script src="js/modules/announcements.js?v=20261110"></script>
-  <script src="js/modules/users.js?v=20261110"></script>
-  <script src="js/modules/activity.js?v=20261110"></script>
-  <script src="js/modules/reports.js?v=20261110"></script>
-  <script src="js/modules/settings.js?v=20261110"></script>
-  <script src="js/modules/dashboard.js?v=20261110"></script>
+  <script src="js/modules/departments.js?v=20261111"></script>
+  <script src="js/modules/services.js?v=20261111"></script>
+  <script src="js/modules/members.js?v=20261111"></script>
+  <script src="js/modules/momo.js?v=20261111"></script>
+  <script src="js/modules/dues.js?v=20261111"></script>
+  <script src="js/modules/offerings.js?v=20261111"></script>
+  <script src="js/modules/attendance.js?v=20261111"></script>
+  <script src="js/modules/ministers.js?v=20261111"></script>
+  <script src="js/modules/announcements.js?v=20261111"></script>
+  <script src="js/modules/users.js?v=20261111"></script>
+  <script src="js/modules/activity.js?v=20261111"></script>
+  <script src="js/modules/reports.js?v=20261111"></script>
+  <script src="js/modules/settings.js?v=20261111"></script>
+  <script src="js/modules/dashboard.js?v=20261111"></script>
 
   <!-- UI Components (Profile, Account, Theme Toggle) -->
-  <script src="js/ui.js?v=20261110"></script>
+  <script src="js/ui.js?v=20261111"></script>
 </body>
 </html>
