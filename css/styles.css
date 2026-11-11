@@ -818,3 +818,15 @@ html[data-theme="dark"] .toast { box-shadow:0 12px 36px rgba(0,0,0,.5); }
 :where(html[data-theme="dark"]) .dues-recorder-row strong{color:var(--brand-text)}
 :where(html[data-theme="dark"]) .user-notice{border:1px solid #324c53;border-left:4px solid #247f9c;background:#162529;color:#b2dcec}
     }
+
+
+/* ---- Mobile menu: every item tappable, one per row, overlay no longer covers the menu ---- */
+@media (max-width:680px) {
+  body.nav-open:after { content:none; display:none; }                     /* old overlay sat ABOVE the menu and swallowed taps */
+  body.nav-open { overflow:hidden; }
+  .sidebar { z-index:60; width:min(300px,86vw); max-height:100vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:calc(16px + env(safe-area-inset-top, 0px)) 14px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .nav { grid-template-columns:1fr; gap:4px; }
+  .nav a { min-height:48px; padding:10px 12px; font-size:15px; touch-action:manipulation; -webkit-tap-highlight-color:rgba(255,255,255,.25); }
+  .workspace { position:relative; }
+  body.nav-open .workspace::after { content:""; position:fixed; inset:0; z-index:50; background:rgba(13,35,47,.5); }   /* dims the page, sits BELOW the menu */
+}

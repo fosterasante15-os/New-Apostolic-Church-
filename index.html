@@ -4,7 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Church Management — Dashboard</title>
-  <link rel="stylesheet" href="css/styles.css?v=20261111">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="NAC Kumasi">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#123d55">
+  <link rel="stylesheet" href="css/styles.css?v=20261112">
   <script>
     /* Theme is applied before first paint so the page never flashes the wrong colours. */
     (function () { try { var t = localStorage.getItem('church-theme-v1'); document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); } catch (_) { document.documentElement.setAttribute('data-theme', 'light'); } })();
@@ -43,6 +51,7 @@
           <div class="profile-menu" id="profile-menu" role="menu" aria-label="Account" hidden>
             <div class="profile-menu-head"><span class="avatar avatar-lg" id="profile-menu-avatar" aria-hidden="true">A</span><div class="profile-menu-id"><strong id="profile-menu-name">Account</strong><small id="profile-menu-email"></small><em id="profile-menu-role"></em></div></div>
             <button class="profile-menu-item" id="customize-profile" type="button" role="menuitem"><span aria-hidden="true">✎</span>Customize profile</button>
+            <button class="profile-menu-item" id="install-app" type="button" role="menuitem"><span aria-hidden="true">⬇</span>Install app</button>
             <button class="profile-menu-item is-danger" id="logout-button" type="button" role="menuitem"><span aria-hidden="true">↪</span>Log out</button>
           </div>
         </div></div></header>
@@ -711,6 +720,16 @@
       <div class="profile-dialog-actions"><button class="plain-button" id="profile-cancel" type="button">Cancel</button><button class="primary-button" type="submit">Save profile</button></div>
     </form>
   </dialog>
+  <dialog class="settings-dialog" id="install-dialog" aria-labelledby="install-title">
+    <div class="settings-dialog-body">
+      <div class="settings-dialog-icon is-info" aria-hidden="true">⬇</div>
+      <h3 id="install-title">Install this app</h3>
+      <p id="install-intro" style="margin:0;color:#4f6370;font-size:14px;"></p>
+      <ul id="install-steps"></ul>
+    </div>
+    <div class="settings-dialog-actions"><button class="primary-button" id="install-ok" type="button">Got it</button></div>
+  </dialog>
+
   <dialog class="logout-dialog" id="logout-dialog" aria-labelledby="logout-dialog-title">
     <div class="logout-dialog-body">
       <div class="logout-dialog-icon" aria-hidden="true">↪</div>
@@ -755,30 +774,31 @@
   </dialog>
   <!-- Supabase Cloud SDK & Data Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-  <script src="js/supabase-client.js?v=20261111"></script>
+  <script src="js/supabase-client.js?v=20261112"></script>
 
   <!-- Core Security & Infrastructure -->
-  <script src="js/access.js?v=20261111"></script>
-  <script src="js/notifications.js?v=20261111"></script>
-  <script src="js/slideshow.js?v=20261111"></script>
+  <script src="js/access.js?v=20261112"></script>
+  <script src="js/notifications.js?v=20261112"></script>
+  <script src="js/slideshow.js?v=20261112"></script>
 
   <!-- Business Modules -->
-  <script src="js/modules/departments.js?v=20261111"></script>
-  <script src="js/modules/services.js?v=20261111"></script>
-  <script src="js/modules/members.js?v=20261111"></script>
-  <script src="js/modules/momo.js?v=20261111"></script>
-  <script src="js/modules/dues.js?v=20261111"></script>
-  <script src="js/modules/offerings.js?v=20261111"></script>
-  <script src="js/modules/attendance.js?v=20261111"></script>
-  <script src="js/modules/ministers.js?v=20261111"></script>
-  <script src="js/modules/announcements.js?v=20261111"></script>
-  <script src="js/modules/users.js?v=20261111"></script>
-  <script src="js/modules/activity.js?v=20261111"></script>
-  <script src="js/modules/reports.js?v=20261111"></script>
-  <script src="js/modules/settings.js?v=20261111"></script>
-  <script src="js/modules/dashboard.js?v=20261111"></script>
+  <script src="js/modules/departments.js?v=20261112"></script>
+  <script src="js/modules/services.js?v=20261112"></script>
+  <script src="js/modules/members.js?v=20261112"></script>
+  <script src="js/modules/momo.js?v=20261112"></script>
+  <script src="js/modules/dues.js?v=20261112"></script>
+  <script src="js/modules/offerings.js?v=20261112"></script>
+  <script src="js/modules/attendance.js?v=20261112"></script>
+  <script src="js/modules/ministers.js?v=20261112"></script>
+  <script src="js/modules/announcements.js?v=20261112"></script>
+  <script src="js/modules/users.js?v=20261112"></script>
+  <script src="js/modules/activity.js?v=20261112"></script>
+  <script src="js/modules/reports.js?v=20261112"></script>
+  <script src="js/modules/settings.js?v=20261112"></script>
+  <script src="js/modules/dashboard.js?v=20261112"></script>
 
   <!-- UI Components (Profile, Account, Theme Toggle) -->
-  <script src="js/ui.js?v=20261111"></script>
+  <script src="js/ui.js?v=20261112"></script>
+  <script src="js/pwa.js?v=20261112"></script>
 </body>
 </html>

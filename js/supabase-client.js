@@ -19,6 +19,7 @@
   }
 
   const STORES = {
+    profiles: 'church-profiles-v1',
     members: 'church-members-v1',
     departments: 'church-departments-v1',
     services: 'church-services-v1',
@@ -201,6 +202,10 @@
     ministers: { store: STORES.ministers, newFirst: true, map: [['id','id'],['name','name'],['role','role'],
       ['note','bio'],['photo','photo'],['order','display_order','int']] },
     announcements: { store: STORES.announcements, newFirst: true, map: [['id','id'],['title','title'],['date','date'],['content','content']] },
+    // account profiles (display name + photo), keyed by e-mail: { "name@x.com": { name, photo } }
+    profiles: { store: STORES.profiles, table: 'user_profiles', optional: true, kind: 'map', map: [['id','id'],['name','name'],['photo','photo']],
+      toItems: parsed => Object.keys(parsed || {}).filter(k => parsed[k] && typeof parsed[k] === 'object').map(k => Object.assign({ id: k }, parsed[k])),
+      fromItems: items => { const o = {}; items.forEach(i => { const c = Object.assign({}, i); delete c.id; o[i.id] = c; }); return o; } },
     // attendance is stored locally as { "<serviceKey>": { "<memberId>": "present" | ... } }
     attendance: { store: STORES.attendance, kind: 'map', noExtra: true, map: [['id','id'],['records','records','json',{}]],
       post: row => { row.service_id = row.id; },
@@ -208,7 +213,7 @@
       fromItems: items => { const o = {}; items.forEach(i => { o[i.id] = i.records; }); return o; } }
   };
   Object.keys(COLLECTIONS).forEach(t => {
-    const d = COLLECTIONS[t]; d.table = t;
+    const d = COLLECTIONS[t]; d.table = d.table || t;
     d.toItems = d.toItems || (p => (Array.isArray(p) ? p : []).filter(x => x && typeof x === 'object'));
     d.fromItems = d.fromItems || (items => items);
   });
@@ -384,7 +389,11 @@
     let changed = false; const errors = [];
     for (const name of Object.keys(COLLECTIONS)) {
       try { const r = await syncCollection(name); changed = changed || r.changed; }
-      catch (e) { errors.push(name + ': ' + ((e && (e.message || e.details)) || e)); }
+      catch (e) {
+        const text = String((e && (e.message || e.details)) || e);
+        if (COLLECTIONS[name].optional && /does not exist|schema cache|could not find the table|relation|PGRST205|42P01|404/i.test(text)) console.info('[Supabase Sync] optional table not set up yet:', COLLECTIONS[name].table);
+        else errors.push(name + ': ' + text);
+      }
     }
     try { const r = await syncSettings(); changed = changed || r.changed; }
     catch (e) { errors.push('settings: ' + ((e && (e.message || e.details)) || e)); }

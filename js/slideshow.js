@@ -44,47 +44,12 @@
       /* Background starts on a different photo and changes 5 s after the banner, so the two never show the same picture. */
       slideshow([...document.querySelectorAll('[data-backdrop-image]')], { start: 1, firstChange: 5000 });
       const navToggle = document.getElementById('mobile-nav-toggle');
-      const sidebarBackdrop = document.getElementById('sidebar-backdrop');
-
-      const closeNav = () => {
-        document.body.classList.remove('nav-open');
-        navToggle?.setAttribute('aria-expanded', 'false');
-      };
-
-      const openNav = () => {
-        document.body.classList.add('nav-open');
-        navToggle?.setAttribute('aria-expanded', 'true');
-      };
-
-      const toggleNav = e => {
-        if (e) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        if (document.body.classList.contains('nav-open')) {
-          closeNav();
-        } else {
-          openNav();
-        }
-      };
-
-      navToggle?.addEventListener('click', toggleNav);
-      sidebarBackdrop?.addEventListener('click', closeNav);
-      sidebarBackdrop?.addEventListener('touchend', e => {
-        e.preventDefault();
-        closeNav();
-      });
-
-      document.querySelectorAll('.nav a').forEach(link => {
-        link.addEventListener('click', closeNav);
-      });
-
-      document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && document.body.classList.contains('nav-open')) {
-          closeNav();
-          navToggle?.focus();
-        }
-      });
+      navToggle?.addEventListener('click', () => { const open = document.body.classList.toggle('nav-open'); navToggle.setAttribute('aria-expanded', String(open)); });
+      document.querySelectorAll('.nav a').forEach(link => link.addEventListener('click', () => { document.body.classList.remove('nav-open'); navToggle?.setAttribute('aria-expanded','false'); }));
+      const closeNav = () => { document.body.classList.remove('nav-open'); navToggle?.setAttribute('aria-expanded', 'false'); };
+      document.querySelector('.workspace')?.addEventListener('click', e => { if (e.target === e.currentTarget && document.body.classList.contains('nav-open')) closeNav(); });   /* tap the dimmed page to close */
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNav(); });
+      window.addEventListener('hashchange', closeNav);
       const logoutDialog = document.getElementById('logout-dialog');
       const closeLogoutDialog = () => { if (logoutDialog?.open) logoutDialog.close(); };
       document.getElementById('logout-button')?.addEventListener('click', () => { if (logoutDialog?.showModal) logoutDialog.showModal(); });
