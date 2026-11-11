@@ -14,10 +14,9 @@
         return result;
       };
       function render() {
-        const rawMembers = Array.isArray(window.churchMembers) ? window.churchMembers : read('church-members-v1', []);
-        const members = Array.isArray(rawMembers) ? rawMembers : [];
-        const services = Array.isArray(window.churchServices) ? window.churchServices : read('church-services-v1', []);
-        const ministers = Array.isArray(window.churchMinisters) ? window.churchMinisters : read('church-reconstruction-ministers-v1', []);
+        const members = (Array.isArray(window.churchMembers) ? window.churchMembers : read('church-members-v1')).filter(member => member.status !== 'Gone Soul');
+        const services = Array.isArray(window.churchServices) ? window.churchServices : read('church-services-v1');
+        const ministers = Array.isArray(window.churchMinisters) ? window.churchMinisters : read('church-reconstruction-ministers-v1');
         const current = currentMonth(), active = members.filter(member => !member.status || member.status === 'Active').length;
         const newThisMonth = members.filter(member => monthKey(member.joined) === current).length;
         const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
@@ -45,35 +44,18 @@
         }
 
         const ministerCards = document.getElementById('dash-minister-cards');
-        if (ministerCards) {
+        if (ministerCards && ministers.length) {
           ministerCards.replaceChildren();
-          if (ministers.length > 0) {
-            ministers.slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)).forEach(minister => {
-              const card = document.createElement('article'); card.className = 'minister-card';
-              const initials = String(minister.name || 'M').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'M';
-              const avatar = document.createElement('div'); avatar.className = 'minister-avatar';
-              if (minister.photo) {
-                const img = document.createElement('img');
-                img.className = 'managed-minister-photo';
-                img.src = minister.photo;
-                img.alt = `Photo of ${minister.name || 'Minister'}`;
-                img.decoding = 'async';
-                img.addEventListener('error', () => { avatar.replaceChildren(); avatar.textContent = initials; });
-                avatar.append(img);
-              } else {
-                avatar.textContent = initials;
-              }
-              const name = document.createElement('h3'); name.textContent = minister.name || 'Minister';
-              const role = document.createElement('div'); role.className = 'minister-role'; role.textContent = minister.role || 'Minister';
-              const note = document.createElement('p'); note.textContent = minister.note || '';
-              card.append(avatar, name, role, note); ministerCards.append(card);
-            });
-          } else {
-            const p = document.createElement('p'); p.className = 'quick-note'; p.textContent = 'No ministers added yet.';
-            ministerCards.append(p);
-          }
+          ministers.slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)).forEach(minister => {
+            const card = document.createElement('article'); card.className = 'minister-card';
+            const avatar = document.createElement('div'); avatar.className = 'minister-avatar'; avatar.textContent = String(minister.name || 'M').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+            const name = document.createElement('h3'); name.textContent = minister.name || 'Minister';
+            const role = document.createElement('div'); role.className = 'minister-role'; role.textContent = minister.role || 'Minister';
+            const note = document.createElement('p'); note.textContent = minister.note || '';
+            card.append(avatar, name, role, note); ministerCards.append(card);
+          });
         }
       }
-      ['members-change', 'services-change', 'dues-change', 'ministers-change', 'church-profile-change', 'attendance-change', 'offerings-change', 'storage'].forEach(event => window.addEventListener(event, render));
+      ['members-change', 'services-change', 'dues-change', 'ministers-change', 'church-profile-change'].forEach(event => window.addEventListener(event, render));
       render(); setTimeout(render, 0);
     })();
