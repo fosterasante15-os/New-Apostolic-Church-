@@ -78,7 +78,7 @@ module.exports = async function handler(req, res) {
 
     const created = await supabase('/auth/v1/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { name, role, status } })
+      body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { name, display_name: name, role, status } })
     });
     if (!created.response.ok || !created.data?.id) {
       const message = created.data?.msg || created.data?.message || created.data?.error_description || 'Supabase could not create the account.';

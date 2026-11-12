@@ -47,6 +47,8 @@ for (const key of ['sb_secret_test_not_a_real_key', 'eyJ.test-legacy-service-rol
     }
     assert.equal(endpoint.calls[2].url.endsWith('/auth/v1/admin/users'), true);
     assert.equal(JSON.parse(endpoint.calls[2].body).email_confirm, true);
+    assert.equal(JSON.parse(endpoint.calls[2].body).user_metadata.name, 'Test User');
+    assert.equal(JSON.parse(endpoint.calls[2].body).user_metadata.display_name, 'Test User');
     assert.match(endpoint.calls[3].url, /profiles\?on_conflict=id$/);
     assert.match(endpoint.calls[3].headers.Prefer, /resolution=merge-duplicates/);
     assert.equal(JSON.parse(endpoint.calls[3].body).role, 'admin');
@@ -208,4 +210,12 @@ test('Save user label remains stable and duplicate-submission protection remains
   assert.match(users, /if \(saveBtn\.disabled\) return/);
   assert.match(users, /saveBtn\.disabled = true/);
   assert.match(users, /finally \{\s+saveBtn\.disabled = false/);
+});
+
+test('display_name repair only adds the nullable compatibility column without rewriting data or permissions', () => {
+  const sql = fs.readFileSync(path.join(root, 'fix-profile-display-name.sql'), 'utf8').replace(/--[^\n]*/g, '');
+  assert.match(sql, /ALTER TABLE public\.profiles\s+ADD COLUMN IF NOT EXISTS display_name TEXT;/i);
+  assert.doesNotMatch(sql, /\b(?:DROP|DELETE|UPDATE|TRUNCATE|GRANT|REVOKE)\b/i);
+  assert.doesNotMatch(sql, /NOT NULL|CREATE\s+(?:TRIGGER|POLICY|FUNCTION)/i);
+  assert.match(sql, /BEGIN;[\s\S]+COMMIT;/i);
 });

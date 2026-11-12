@@ -1,6 +1,8 @@
 -- ==============================================================================
 -- New Apostolic Church Kumasi Central — Supabase Schema & Database Setup
 -- Run this complete script in your Supabase SQL Editor (supabase.com -> SQL Editor -> New Query)
+-- INITIAL INSTALL ONLY: this file drops existing tables and their data.
+-- For the live display_name error, run fix-profile-display-name.sql instead.
 -- ==============================================================================
 
 -- Clean up any preexisting tables with mismatched types (e.g. if members had uuid id)
@@ -23,6 +25,7 @@ CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   name TEXT,
+  display_name TEXT,
   role TEXT DEFAULT 'admin' CHECK (role IN ('main-admin', 'admin', 'account', 'member')),
   status TEXT DEFAULT 'Active',
   photo_url TEXT,
