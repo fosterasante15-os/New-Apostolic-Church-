@@ -177,7 +177,7 @@
     nameInput.value = user?.name || '';
     emailInput.value = user?.email || '';
     passwordInput.value = '';
-    roleInput.value = approveMode ? (user?.role && user.role !== 'member' ? user.role : 'admin') : (user?.role || 'member');
+    roleInput.value = approveMode ? (user?.role && user.role !== 'member' ? user.role : 'admin') : (user?.role || 'admin');
     statusInput.value = (approveMode || resetMode) ? 'Active' : (user?.status || 'Active');
 
     if (approveMode) {
@@ -208,6 +208,7 @@
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (saveBtn.disabled) return;
     const email = emailInput.value.trim().toLowerCase();
     if (!email || !emailInput.checkValidity()) { emailInput.reportValidity(); return; }
     const duplicate = users.some(user => user.email.toLowerCase() === email && user.id !== editingId);
@@ -231,6 +232,8 @@
     if (approveMode) values.status = selectedStatus || 'Active';
 
     if (!editingId && !approveMode) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving to Supabase…';
       try {
         const result = await window.ChurchDB.createUserAccount({ name, email, password, role: selectedRole, status: selectedStatus });
         const created = result?.user;
@@ -238,10 +241,16 @@
         users.unshift(created);
         logActivity({ action: 'create', userId: created.id, userName: name, role: selectedRole, summary: `Main Admin created account for ${email}`, data: { email, name, role: selectedRole, status: selectedStatus } });
         persist(); render(); dialog.close();
+        passwordInput.value = '';
         notice.textContent = `New user ${name} was added to Supabase successfully.`;
-        window.notify?.(`New user ${name} (${email}) has been added to the system and can sign in on any device.`, 'success', 'New user added');
+        const accessNote = selectedStatus === 'Active' && selectedRole !== 'member' ? 'They can sign in on any device.' : 'Administration sign-in requires Active status and an Admin, Account, or Main admin role.';
+        window.notify?.(`New user ${name} (${email}) has been added to the system. ${accessNote}`, 'success', 'New user added');
       } catch (err) {
+        notice.textContent = err.message || 'Supabase could not create the account.';
         window.notify?.(err.message || 'Supabase could not create the account.', 'error', 'Account not created');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Add new user';
       }
       return;
     }

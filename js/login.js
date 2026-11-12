@@ -29,7 +29,8 @@
   }
 
   let signedIn = null; try { signedIn = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch (_) {}
-  if (signedIn && signedIn.role && !params.has('loggedout')) { location.replace(HOME); return; }
+  if (signedIn && signedIn.role && signedIn.isCloud && !params.has('loggedout')) { location.replace(HOME); return; }
+  if (signedIn && !signedIn.isCloud) sessionStorage.removeItem(AUTH_KEY);
   if (params.has('loggedout')) message('You have been logged out.', true);
 
   /* The login identity always uses the church logo; the Settings logo is for the administration workspace. */
@@ -83,23 +84,23 @@
         console.log('[Supabase Auth fallback]', err.message);
         if (/not confirmed/i.test(err.message || '')) throw new Error('Please confirm your email address using the link we sent you, then wait for the Main Admin to approve your account.');
         if (/pending approval|inactive|declined|Member accounts/i.test(err.message)) throw err;
-        if (/invalid login credentials|invalid credentials|user not found/i.test(err.message || '')) throw new Error('Login failed because these credentials are not registered. Ask the Main Admin to create your account and give you the login credentials.');
+        if (/invalid login credentials|invalid credentials|user not found/i.test(err.message || '')) throw new Error('Email or password is incorrect. Check the credentials supplied by the Main Admin.');
+        if (email === MAIN.email) throw new Error('Main Admin sign-in requires the Supabase account. Check your internet connection and use the Supabase password; browser-only sign-in cannot create accounts for other users.');
       }
     }
 
     // 2. Fallback to local admin / registered credentials
     /* There are no built-in or default passwords. This offline fallback only accepts a password that was set on THIS device
        through Users -> Reset password. Everyone else signs in through Supabase Auth above. */
-    const changed = creds()[MAIN.id];
-    const isMaster = Boolean(changed) && (await hashPw(MAIN.id, pw)) === changed;
 
     if (email === MAIN.email) {
-      return isMaster ? { id: MAIN.id, email: MAIN.email, name: MAIN.name, role: MAIN.role, status: MAIN.status } : null;
+      throw new Error('Main Admin sign-in requires a working Supabase connection. Browser-only credentials cannot authorize account creation.');
     }
 
     const list = readJson(USERS_KEY, []);
     const user = Array.isArray(list) && list.find(u => String(u.email).toLowerCase() === email);
     if (user) {
+      if (user.role === 'main-admin') throw new Error('Main Admin sign-in requires a working Supabase connection. Please sign in with your Supabase credentials.');
       const userHashMatch = creds()[user.id] && creds()[user.id] === (await hashPw(user.id, pw));
       if (!userHashMatch) return null;
       if (String(user.status || '').toLowerCase() === 'pending') {

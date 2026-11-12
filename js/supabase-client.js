@@ -74,15 +74,28 @@
 
     async createUserAccount(payload) {
       if (!client) throw new Error('Supabase client is not available.');
+      const sessionError = () => Object.assign(new Error('Your Supabase session is missing or expired. Sign out, then sign in again as a Main Admin using the Supabase account password.'), { code: 'AUTH_REQUIRED' });
       const { data, error } = await client.auth.getSession();
-      if (error || !data?.session?.access_token) throw new Error('Your Supabase session is missing or expired. Sign in again as a Main Admin.');
-      const response = await fetch('/api/admin-create-user', {
+      let session = data?.session || null;
+      if (error || !session?.access_token || (session.expires_at && session.expires_at * 1000 <= Date.now() + 60000)) {
+        const refreshed = await client.auth.refreshSession();
+        session = refreshed.data?.session || null;
+      }
+      if (!session?.access_token) throw sessionError();
+      const request = token => fetch('/api/admin-create-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload || {})
       });
+      let response = await request(session.access_token);
+      if (response.status === 401) {
+        const refreshed = await client.auth.refreshSession();
+        const freshSession = refreshed.data?.session || null;
+        if (freshSession?.access_token) response = await request(freshSession.access_token);
+      }
       let result = {};
       try { result = await response.json(); } catch (_) {}
+      if (response.status === 401) throw sessionError();
       if (!response.ok) throw new Error(result.error || 'Supabase could not create the account.');
       return result;
     },
