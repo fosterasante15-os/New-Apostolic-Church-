@@ -83,7 +83,7 @@
         console.log('[Supabase Auth fallback]', err.message);
         if (/not confirmed/i.test(err.message || '')) throw new Error('Please confirm your email address using the link we sent you, then wait for the Main Admin to approve your account.');
         if (/pending approval|inactive|declined|Member accounts/i.test(err.message)) throw err;
-        if (/invalid login credentials|invalid credentials|user not found/i.test(err.message || '')) throw new Error('Login failed because this email/password is not registered in Supabase Auth. Ask the user to choose Register on this sign-in page, verify the email, and wait for Main Admin approval.');
+        if (/invalid login credentials|invalid credentials|user not found/i.test(err.message || '')) throw new Error('Login failed because these credentials are not registered. Ask the Main Admin to create your account and give you the login credentials.');
       }
     }
 
@@ -117,40 +117,6 @@
     return null;
   }
 
-  let isRegisterMode = false;
-  const toggleBtn = $('toggle-auth-mode');
-  const nameWrap = $('auth-name-wrap');
-  const nameInput = $('auth-name');
-
-  toggleBtn?.addEventListener('click', () => {
-    isRegisterMode = !isRegisterMode;
-    if (isRegisterMode) {
-      if (nameWrap) {
-        nameWrap.hidden = false;
-        nameWrap.style.display = 'grid';
-      }
-      if (nameInput) nameInput.required = true;
-      $('auth-submit').textContent = 'Submit Registration for Approval';
-      toggleBtn.textContent = 'Already have an account? Sign in';
-      $('auth-password').autocomplete = 'new-password';
-      nameInput?.focus();
-    } else {
-      if (nameWrap) {
-        nameWrap.hidden = true;
-        nameWrap.style.display = 'none';
-      }
-      if (nameInput) {
-        nameInput.required = false;
-        nameInput.value = '';
-      }
-      $('auth-submit').textContent = 'Sign in';
-      toggleBtn.textContent = 'Need an account? Register for access';
-      $('auth-password').autocomplete = 'current-password';
-      $('auth-email').focus();
-    }
-    message('');
-  });
-
   $('auth-form').addEventListener('submit', async event => {
     event.preventDefault(); message('');
     const email = $('auth-email').value.trim().toLowerCase(), pw = $('auth-password').value;
@@ -160,43 +126,6 @@
     const WEAK = ['12345678', '123456789', '1234567890', '123456', '11111111', 'admin123', 'admin', 'password', 'password1', 'password123', 'qwerty123'];
     if (WEAK.includes(pw.toLowerCase())) { message('That password is not allowed because it is too easy to guess. Ask the Main Admin to set a new one.'); $('auth-password').focus(); return; }
     $('auth-submit').disabled = true;
-
-    if (isRegisterMode) {
-      const fullName = nameInput ? nameInput.value.trim() : '';
-      if (!fullName) {
-        message('Please enter your full name.');
-        nameInput?.focus();
-        $('auth-submit').disabled = false;
-        return;
-      }
-      if (email === MAIN.email) {
-        message('This email address is reserved for the Main Admin.');
-        $('auth-submit').disabled = false;
-        return;
-      }
-      try {
-        if (!(window.ChurchDB && window.ChurchDB.client)) throw new Error('Registration needs an internet connection. Please try again when you are online.');
-        /* Creates the account (status Pending) AND the approval request online, so the Main Admin receives it at once on any device. */
-        const result = await window.ChurchDB.registerAccount({ email, password: pw, name: fullName });
-        logActivity({ action: 'registration-requested', userId: result.userId, userName: fullName, role: 'pending', summary: `Registration requested for ${fullName} (${email}) - pending approval`, data: { email, name: fullName } });
-        message(result.requestSent
-          ? 'Registration submitted! The Main Admin has been notified. You can sign in once your account is approved.'
-          : 'Your account was created, but the approval request could not be sent yet. Please keep this page open on a working internet connection; it will be sent automatically.', true);
-        $('auth-email').value = '';
-        $('auth-password').value = '';
-        if (nameInput) nameInput.value = '';
-        isRegisterMode = false;
-        if (nameWrap) { nameWrap.hidden = true; nameWrap.style.display = 'none'; }
-        if (nameInput) nameInput.required = false;
-        $('auth-submit').textContent = 'Sign in';
-        if (toggleBtn) toggleBtn.textContent = 'Need an account? Register for access';
-      } catch (e) {
-        message(e.message || 'Registration failed.');
-      } finally {
-        $('auth-submit').disabled = false;
-      }
-      return;
-    }
 
     try {
       const session = await authenticate(email, pw);
