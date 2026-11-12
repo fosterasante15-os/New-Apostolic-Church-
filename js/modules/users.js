@@ -171,7 +171,7 @@
       if (saveBtn) saveBtn.textContent = 'Save user';
     } else {
       dialogTitle.textContent = 'Add user';
-      if (saveBtn) saveBtn.textContent = 'Add new user';
+      if (saveBtn) saveBtn.textContent = 'Save user';
     }
 
     nameInput.value = user?.name || '';
@@ -233,7 +233,6 @@
 
     if (!editingId && !approveMode) {
       saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving to Supabase…';
       try {
         const result = await window.ChurchDB.createUserAccount({ name, email, password, role: selectedRole, status: selectedStatus });
         const created = result?.user;
@@ -242,7 +241,7 @@
         logActivity({ action: 'create', userId: created.id, userName: name, role: selectedRole, summary: `Main Admin created account for ${email}`, data: { email, name, role: selectedRole, status: selectedStatus } });
         persist(); render(); dialog.close();
         passwordInput.value = '';
-        notice.textContent = `New user ${name} was added to Supabase successfully.`;
+        notice.textContent = `New user ${name} has been added to the system.`;
         const accessNote = selectedStatus === 'Active' && selectedRole !== 'member' ? 'They can sign in on any device.' : 'Administration sign-in requires Active status and an Admin, Account, or Main admin role.';
         window.notify?.(`New user ${name} (${email}) has been added to the system. ${accessNote}`, 'success', 'New user added');
       } catch (err) {
@@ -250,7 +249,7 @@
         window.notify?.(err.message || 'Supabase could not create the account.', 'error', 'Account not created');
       } finally {
         saveBtn.disabled = false;
-        saveBtn.textContent = 'Add new user';
+        saveBtn.textContent = 'Save user';
       }
       return;
     }

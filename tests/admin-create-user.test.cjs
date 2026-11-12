@@ -10,9 +10,9 @@ const clientSource = fs.readFileSync(path.join(root, 'js/supabase-client.js'), '
 function reply(status, data) {
   return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(data), json: async () => data };
 }
-function loadEndpoint(key, responses) {
+function loadEndpoint(key, responses, adminKey = '') {
   const calls = [];
-  const context = { module: { exports: {} }, process: { env: { SUPABASE_SERVICE_ROLE_KEY: key } }, fetch: async (url, options) => {
+  const context = { module: { exports: {} }, console: { warn() {} }, process: { env: { SUPABASE_SERVICE_ROLE_KEY: key, SUPABASE_AUTH_ADMIN_KEY: adminKey } }, fetch: async (url, options) => {
     calls.push({ url, ...options });
     const next = responses.shift();
     assert.ok(next, 'Unexpected upstream request');
@@ -85,10 +85,11 @@ test('profile lookup failure is a server error rather than a user-session error'
   assert.equal((await invoke(endpoint)).code, 502);
 });
 test('rejected server key is not returned as an expired user session', async () => {
-  const endpoint = loadEndpoint('sb_secret_test_only', [reply(200, actor), reply(200, adminProfile), reply(401, { msg: 'This endpoint requires a valid Bearer token' })]);
+  const endpoint = loadEndpoint('sb_secret_test_only', [reply(200, actor), reply(200, adminProfile), reply(401, { msg: 'This endpoint requires a valid Bearer token' }), reply(403, { error_code: 'bad_jwt', msg: 'invalid JWT' })]);
   const res = await invoke(endpoint);
   assert.equal(res.code, 502);
-  assert.match(res.body.error, /server account-creation key/);
+  assert.equal(res.body.code, 'bad_jwt');
+  assert.match(res.body.error, /SUPABASE_AUTH_ADMIN_KEY/);
 });
 test('existing Auth account is not overwritten', async () => {
   const endpoint = loadEndpoint('sb_secret_test_only', [reply(200, actor), reply(200, adminProfile), reply(422, { msg: 'User already registered' })]);
@@ -158,4 +159,53 @@ test('failed rollback warns that an Auth account may need repair', async () => {
   const res = await invoke(endpoint);
   assert.equal(res.code, 502);
   assert.match(res.body.error, /profile could not be saved or rolled back/);
+});
+
+test('separate legacy Auth Admin key never replaces the caller JWT or database key', async () => {
+  const dbKey = 'sb_secret_test_db_only';
+  const adminKey = 'eyJ.synthetic-service-role.jwt';
+  const endpoint = loadEndpoint(dbKey, happy(), adminKey);
+  const res = await invoke(endpoint);
+  assert.equal(res.code, 201);
+  assert.equal(endpoint.calls[0].headers.apikey, dbKey);
+  assert.equal(endpoint.calls[0].headers.Authorization, 'Bearer test-user-jwt');
+  assert.equal(endpoint.calls[1].headers.apikey, dbKey);
+  assert.equal(endpoint.calls[1].headers.Authorization, undefined);
+  assert.equal(endpoint.calls[2].headers.apikey, adminKey);
+  assert.equal(endpoint.calls[2].headers.Authorization, `Bearer ${adminKey}`);
+  assert.equal(endpoint.calls[3].headers.apikey, dbKey);
+  assert.equal(endpoint.calls[3].headers.Authorization, undefined);
+});
+test('missing Bearer Admin credential gets one documented exact-match compatibility retry', async () => {
+  const key = 'sb_secret_test_compatibility';
+  const endpoint = loadEndpoint(key, [reply(200, actor), reply(200, adminProfile), reply(401, { msg: 'This endpoint requires a valid Bearer token' }), reply(200, { id: 'new-auth-id' }), reply(201, [{ id: 'new-auth-id' }])]);
+  const res = await invoke(endpoint);
+  assert.equal(res.code, 201);
+  assert.equal(endpoint.calls.length, 5);
+  assert.equal(endpoint.calls[2].headers.Authorization, undefined);
+  assert.equal(endpoint.calls[3].headers.Authorization, `Bearer ${key}`);
+  assert.equal(endpoint.calls[3].headers.apikey, key);
+  assert.equal(endpoint.calls[2].body, endpoint.calls[3].body);
+});
+test('a not_admin rejection does not attempt another account-creation request', async () => {
+  const endpoint = loadEndpoint('sb_secret_test_only', [reply(200, actor), reply(200, adminProfile), reply(403, { error_code: 'not_admin', msg: 'User not allowed' })]);
+  const res = await invoke(endpoint);
+  assert.equal(res.code, 502);
+  assert.equal(res.body.code, 'not_admin');
+  assert.equal(endpoint.calls.length, 3);
+});
+test('Admin rollback uses the Auth Admin key, not the database key', async () => {
+  const adminKey = 'eyJ.synthetic-service-role.jwt';
+  const endpoint = loadEndpoint('sb_secret_test_db_only', [reply(200, actor), reply(200, adminProfile), reply(200, { id: 'new-auth-id' }), reply(400, {}), reply(200, {})], adminKey);
+  assert.equal((await invoke(endpoint)).code, 502);
+  assert.equal(endpoint.calls[4].headers.apikey, adminKey);
+  assert.equal(endpoint.calls[4].headers.Authorization, `Bearer ${adminKey}`);
+});
+test('Save user label remains stable and duplicate-submission protection remains enabled', () => {
+  const users = fs.readFileSync(path.join(root, 'js/modules/users.js'), 'utf8');
+  assert.equal(users.includes('Saving to Supabase'), false);
+  assert.match(users, /saveBtn\.textContent = 'Save user'/);
+  assert.match(users, /if \(saveBtn\.disabled\) return/);
+  assert.match(users, /saveBtn\.disabled = true/);
+  assert.match(users, /finally \{\s+saveBtn\.disabled = false/);
 });

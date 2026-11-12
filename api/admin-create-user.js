@@ -1,5 +1,7 @@
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://nsccmfevvkvjhvxrtmax.supabase.co';
 const SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+// Optional legacy service_role JWT for projects whose Auth Admin routes require it.
+const AUTH_ADMIN_KEY = (process.env.SUPABASE_AUTH_ADMIN_KEY || SERVICE_ROLE_KEY).trim();
 const MAIN_ADMIN_EMAIL = 'fosterasante15@gmail.com';
 const ALLOWED_ROLES = new Set(['main-admin', 'admin', 'account', 'member']);
 const ALLOWED_STATUSES = new Set(['Active', 'Pending', 'Inactive', 'Locked', 'Blocked']);
@@ -11,13 +13,14 @@ function json(res, status, body) {
   return res.end(JSON.stringify(body));
 }
 
-async function supabase(path, options = {}) {
+async function supabase(path, options = {}, compatibleAuth = false) {
+  const key = path.startsWith('/auth/v1/admin/') ? AUTH_ADMIN_KEY : SERVICE_ROLE_KEY;
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...options,
     headers: {
-      apikey: SERVICE_ROLE_KEY,
+      apikey: key,
       // New secret keys are not JWTs. Let the gateway authenticate the apikey.
-      ...(SERVICE_ROLE_KEY.startsWith('sb_secret_') ? {} : { Authorization: `Bearer ${SERVICE_ROLE_KEY}` }),
+      ...(key.startsWith('sb_secret_') && !compatibleAuth ? {} : { Authorization: `Bearer ${key}` }),
       'Content-Type': 'application/json',
       ...(options.headers || {})
     }
@@ -25,6 +28,14 @@ async function supabase(path, options = {}) {
   const text = await response.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (_) { data = null; }
+  // Hosted gateways support this legacy compatibility mode only when the
+  // Authorization value exactly matches apikey. Retry only a rejected Auth
+  // admin request; never retry an accepted write or use the caller's JWT here.
+  const authMessage = String(data?.msg || data?.message || data?.error_description || '');
+  const headerRejected = data?.error_code === 'bad_jwt' || data?.error_code === 'no_authorization' || /requires.*bearer|invalid JWT|missing.*authorization/i.test(authMessage);
+  if (!compatibleAuth && key.startsWith('sb_secret_') && path.startsWith('/auth/v1/admin/') && [401, 403].includes(response.status) && headerRejected) {
+    return supabase(path, options, true);
+  }
   return { response, data };
 }
 
@@ -72,7 +83,17 @@ module.exports = async function handler(req, res) {
     if (!created.response.ok || !created.data?.id) {
       const message = created.data?.msg || created.data?.message || created.data?.error_description || 'Supabase could not create the account.';
       if (/already|registered|exists/i.test(String(message))) return json(res, 409, { error: 'An account with this email already exists in Supabase Auth.' });
-      if ([401, 403].includes(created.response.status)) return json(res, 502, { error: 'Supabase rejected the server account-creation key. Verify SUPABASE_SERVICE_ROLE_KEY in Vercel Production and redeploy.' });
+      if ([401, 403].includes(created.response.status)) {
+        const allowedCodes = new Set(['bad_jwt', 'no_authorization', 'not_admin', 'unexpected_audience', 'invalid_credentials']);
+        const upstreamCode = allowedCodes.has(created.data?.error_code) ? created.data.error_code : 'admin_auth_rejected';
+        // Diagnostic metadata only: never log keys, passwords, or user tokens.
+        const keyType = AUTH_ADMIN_KEY.startsWith('sb_secret_') ? 'secret' : 'legacy';
+        console.warn('[account-creation]', JSON.stringify({ stage: 'auth_admin', status: created.response.status, code: upstreamCode, keyType }));
+        const guidance = keyType === 'secret'
+          ? 'This project requires a legacy service_role key for Auth administration. Add it privately as SUPABASE_AUTH_ADMIN_KEY in Vercel Production and redeploy.'
+          : 'The Auth Admin credential is invalid or lacks service_role privileges. Check the private Auth Admin key in Vercel Production.';
+        return json(res, 502, { code: upstreamCode, error: `Account was not created. ${guidance}` });
+      }
       return json(res, created.response.ok ? 502 : created.response.status, { error: message });
     }
 
