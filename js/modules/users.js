@@ -171,7 +171,7 @@
       if (saveBtn) saveBtn.textContent = 'Save user';
     } else {
       dialogTitle.textContent = 'Add user';
-      if (saveBtn) saveBtn.textContent = 'Save user';
+      if (saveBtn) saveBtn.textContent = 'Add new user';
     }
 
     nameInput.value = user?.name || '';
@@ -238,7 +238,8 @@
         users.unshift(created);
         logActivity({ action: 'create', userId: created.id, userName: name, role: selectedRole, summary: `Main Admin created account for ${email}`, data: { email, name, role: selectedRole, status: selectedStatus } });
         persist(); render(); dialog.close();
-        window.notify?.(`Account created for ${email}. The user can sign in on any device.`, 'success', 'Supabase account created');
+        notice.textContent = `New user ${name} was added to Supabase successfully.`;
+        window.notify?.(`New user ${name} (${email}) has been added to the system and can sign in on any device.`, 'success', 'New user added');
       } catch (err) {
         window.notify?.(err.message || 'Supabase could not create the account.', 'error', 'Account not created');
       }
