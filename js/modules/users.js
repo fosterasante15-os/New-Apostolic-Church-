@@ -20,6 +20,7 @@
   const roleFilter = document.getElementById('user-role-filter');
   const dialog = document.getElementById('user-dialog');
   const form = document.getElementById('user-form');
+  const nameInput = document.getElementById('user-name');
   const emailInput = document.getElementById('user-email');
   const passwordInput = document.getElementById('user-password');
   const roleInput = document.getElementById('user-role');
@@ -173,6 +174,7 @@
       if (saveBtn) saveBtn.textContent = 'Save user';
     }
 
+    nameInput.value = user?.name || '';
     emailInput.value = user?.email || '';
     passwordInput.value = '';
     roleInput.value = approveMode ? (user?.role && user.role !== 'member' ? user.role : 'admin') : (user?.role || 'member');
@@ -224,11 +226,22 @@
     const selectedStatus = statusInput.value;
     const roleLabel = ({ 'main-admin': 'Main admin', admin: 'Admin', account: 'Account / Accountant', member: 'Member' })[selectedRole] || selectedRole;
 
-    const values = { email, role: selectedRole, status: selectedStatus };
+    const name = nameInput.value.trim() || email.split('@')[0];
+    const values = { name, email, role: selectedRole, status: selectedStatus };
     if (approveMode) values.status = selectedStatus || 'Active';
 
     if (!editingId && !approveMode) {
-      window.notify?.('This form cannot create a cross-device login. Ask the person to choose Register on the sign-in page, verify their email, then approve the pending request here.', 'info', 'Use Supabase registration');
+      try {
+        const result = await window.ChurchDB.createUserAccount({ name, email, password, role: selectedRole, status: selectedStatus });
+        const created = result?.user;
+        if (!created?.id) throw new Error('Supabase created no user record.');
+        users.unshift(created);
+        logActivity({ action: 'create', userId: created.id, userName: name, role: selectedRole, summary: `Main Admin created account for ${email}`, data: { email, name, role: selectedRole, status: selectedStatus } });
+        persist(); render(); dialog.close();
+        window.notify?.(`Account created for ${email}. The user can sign in on any device.`, 'success', 'Supabase account created');
+      } catch (err) {
+        window.notify?.(err.message || 'Supabase could not create the account.', 'error', 'Account not created');
+      }
       return;
     }
     if (resetMode) {
@@ -243,7 +256,7 @@
     }
 
     if (editingId && !approveMode && window.ChurchDB?.client) {
-      const { error } = await window.ChurchDB.client.from('profiles').update({ email, role: selectedRole, status: selectedStatus }).eq('id', editingId);
+      const { error } = await window.ChurchDB.client.from('profiles').update({ name, email, role: selectedRole, status: selectedStatus }).eq('id', editingId);
       if (error) { window.notify?.(`Could not save the user in Supabase: ${error.message || error}`, 'error', 'User not saved'); return; }
     }
 

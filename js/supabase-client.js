@@ -72,6 +72,21 @@
       await client.auth.signOut();
     },
 
+    async createUserAccount(payload) {
+      if (!client) throw new Error('Supabase client is not available.');
+      const { data, error } = await client.auth.getSession();
+      if (error || !data?.session?.access_token) throw new Error('Your Supabase session is missing or expired. Sign in again as a Main Admin.');
+      const response = await fetch('/api/admin-create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
+        body: JSON.stringify(payload || {})
+      });
+      let result = {};
+      try { result = await response.json(); } catch (_) {}
+      if (!response.ok) throw new Error(result.error || 'Supabase could not create the account.');
+      return result;
+    },
+
     async getSession() {
       if (!client) return null;
       const { data } = await client.auth.getSession();
