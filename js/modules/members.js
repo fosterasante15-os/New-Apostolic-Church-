@@ -6,10 +6,16 @@
       try {
         const saved = JSON.parse(localStorage.getItem(STORE));
         if (Array.isArray(saved)) {
-          members = saved.filter(member => !isPlaceholder(member));
+          members = saved.filter(member => member && typeof member === 'object' && !isPlaceholder(member));
           if (members.length !== saved.length) localStorage.setItem(STORE, JSON.stringify(members));
         }
       } catch (_) {}
+      const readStoredMembers = () => {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORE));
+          return Array.isArray(saved) ? saved.filter(member => member && typeof member === 'object' && !isPlaceholder(member)) : [];
+        } catch (_) { return []; }
+      };
 
       const isGone = x => x && x.status === 'Gone Soul';
       window.isGoneSoul = isGone;
@@ -355,6 +361,10 @@
         if (btn.dataset.action === 'delete' && window.confirm(`Delete ${m.name} (${m.id})? This ID will not be reused.`)) {
           members = members.filter(x => x.id !== m.id); persist(); render(); notice.textContent = `Member ${m.id} deleted.`;
         }
+      });
+      window.ChurchDB?.onStoresChanged?.([STORE, SEQ_STORE], () => {
+        members = readStoredMembers();
+        render();
       });
       commitId(format(Math.max(readSeq(), ...members.map(m => numberOf(m.id)))));
       render();

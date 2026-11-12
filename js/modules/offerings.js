@@ -1,7 +1,12 @@
 /* Offering and thanksgiving: Sunday offering + thanksgiving records, month overview, dashboard figures. */
     (() => {
       const SK = 'church-offerings-v1', TK = 'church-thanksgiving-v1', $ = id => document.getElementById(id);
-      const load = key => { try { const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+      const load = key => {
+        try {
+          const v = JSON.parse(localStorage.getItem(key) || '[]');
+          return Array.isArray(v) ? v.filter(record => record && typeof record === 'object' && !Array.isArray(record)) : [];
+        } catch (_) { return []; }
+      };
       const pad = n => String(n).padStart(2, '0');
       const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       const todayStr = () => ymd(new Date()), monthNow = () => todayStr().slice(0, 7);
@@ -19,6 +24,7 @@
       const isAdmin = () => window.ChurchAccess?.isAdmin ? window.ChurchAccess.isAdmin() : true;
       const newId = prefix => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
       let offerings = load(SK), thanks = load(TK), sEdit = null, tEdit = null, shown = monthNow();
+      window.ChurchDB?.deferViewUpdatesWhile?.(() => Boolean(sEdit || tEdit));
       const persist = () => { try { localStorage.setItem(SK, JSON.stringify(offerings)); localStorage.setItem(TK, JSON.stringify(thanks)); } catch (_) { notify('Records work for this session but could not be saved in browser storage.', 'error'); } };
 
       function dashboard() {
@@ -57,9 +63,11 @@
           const on = key === name; $(`ot-view-${key}`).hidden = !on; const b = $(id); b.className = on ? 'primary-button' : 'outline-link'; b.setAttribute('aria-selected', String(on));
         });
       }
-      function resetSunday() { sEdit = null; $('ot-s-form').reset(); $('ot-s-date').value = lastSunday(); $('ot-s-error').textContent = ''; $('ot-s-save').textContent = '＋ Save Sunday offering'; $('ot-s-cancel').hidden = true; }
-      function resetThanks() { tEdit = null; $('ot-t-form').reset(); $('ot-t-date').value = todayStr(); $('ot-t-error').textContent = ''; $('ot-t-save').textContent = '＋ Save thanksgiving'; $('ot-t-cancel').hidden = true; }
+      function resetSunday() { sEdit = null; $('ot-s-form').reset(); $('ot-s-date').value = lastSunday(); $('ot-s-error').textContent = ''; $('ot-s-save').textContent = '＋ Save Sunday offering'; $('ot-s-cancel').hidden = true; window.ChurchDB?.resumeViewUpdates?.(); }
+      function resetThanks() { tEdit = null; $('ot-t-form').reset(); $('ot-t-date').value = todayStr(); $('ot-t-error').textContent = ''; $('ot-t-save').textContent = '＋ Save thanksgiving'; $('ot-t-cancel').hidden = true; window.ChurchDB?.resumeViewUpdates?.(); }
       function applyMonth() { const v = $('ot-month').value; if (!v) { notify('Choose a month to show.', 'error'); return; } shown = v; render(); }
+
+      const refreshFromStores = () => { offerings = load(SK); thanks = load(TK); render(); };
 
       ['overview', 'sunday', 'thanks'].forEach(name => $(`ot-tab-${name}`).addEventListener('click', () => showTab(name)));
       $('ot-go-sunday').addEventListener('click', () => showTab('sunday')); $('ot-go-thanks').addEventListener('click', () => showTab('thanks'));
@@ -100,4 +108,5 @@
         if (button.dataset.action === 'delete') { if (!isAdmin()) { notify('Only an admin can delete thanksgiving.', 'error', 'Admin access needed'); return; } if (window.confirm(`Delete the thanksgiving of ${money(rec.amount)} on ${prettyDate(rec.date)}?`)) { thanks = thanks.filter(r => r.id !== rec.id); if (tEdit === rec.id) resetThanks(); persist(); render(); notify('Thanksgiving deleted.', 'success'); } }
       });
       $('ot-month').value = shown; resetSunday(); resetThanks(); showTab('overview'); render();
+      window.ChurchDB?.onStoresChanged?.([SK, TK], refreshFromStores);
     })();

@@ -1,4 +1,5 @@
 (() => {
+      const reportRenderers = [];
       document.querySelectorAll('.report-screen').forEach(screen => {
         const form = screen.querySelector('[data-report-filters]');
         let rows = [...screen.querySelectorAll('tbody tr')];
@@ -181,7 +182,29 @@
         window.addEventListener('attendance-change', renderLiveReport);
         window.addEventListener('dues-change', renderLiveReport);
         window.addEventListener('hashchange', renderLiveReport);
+        reportRenderers.push(renderLiveReport);
         renderLiveReport();
         setTimeout(renderLiveReport, 0);
+      });
+      window.ChurchDB?.onStoresChanged?.([
+        'church-members-v1',
+        'church-departments-v1',
+        'church-services-v1',
+        'church-attendance-v1',
+        'church-general-dues-v1',
+        'church-ministry-dues-v1'
+      ], () => {
+        const readArrayStore = key => {
+          try {
+            const value = JSON.parse(localStorage.getItem(key) || '[]');
+            return Array.isArray(value) ? value : [];
+          } catch (_) {
+            return [];
+          }
+        };
+        window.churchMembers = readArrayStore('church-members-v1');
+        window.churchDepartments = readArrayStore('church-departments-v1');
+        window.churchServices = readArrayStore('church-services-v1');
+        reportRenderers.forEach(render => render());
       });
     })();

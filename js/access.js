@@ -3,10 +3,13 @@
       const MAIN_ADMIN = { id: 'user-main-admin', name: 'Main Admin', email: 'fosterasante15@gmail.com', role: 'main-admin', status: 'Active' };
       let session;
       try { session = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null'); } catch (_) { session = null; }
-      if (!session || typeof session !== 'object' || !['admin', 'main-admin', 'account'].includes(String(session.role || '').toLowerCase())) {
-        location.replace('login.html?from=index.html');
+      if (!window.ChurchDB?.isValidAppSession?.(session)) {
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch (_) {}
+        const target = 'index.html' + location.search + location.hash;
+        location.replace('login.html?from=' + encodeURIComponent(target));
         return;
       }
+      session = { ...session, role: String(session.role).trim().toLowerCase(), status: 'Active' };
       if (String(session.role).toLowerCase() === 'main-admin' && (!session.name || session.name === 'Admin')) session.name = MAIN_ADMIN.name;
       try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session)); } catch (_) {}
 

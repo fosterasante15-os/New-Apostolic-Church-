@@ -5,8 +5,8 @@
       const tabs = { church: f('church-dues-tab'), ministry: f('ministry-dues-tab') };
       const views = { church: f('church-dues-view'), ministry: f('ministry-dues-view') };
       const departmentNames = ['Choir', 'Lactating Mothers', 'Left Back Seat', "Men's Fellowship", 'Middle Seat', 'Right Back Seat', 'Sunday School', "The Minister's Wife", "Women's Fellowship", "Children's Fellowship", 'Youth Fellowship', 'Evangelism', 'Welfare'];
-      let dues = [];
-      try { const saved = JSON.parse(localStorage.getItem(STORE) || '[]'); if (Array.isArray(saved)) dues = saved; } catch (_) {}
+      const readList = key => { try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value : []; } catch (_) { return []; } };
+      let dues = readList(STORE);
       let editingId = null;
       const today = () => new Date().toISOString().slice(0, 10);
       const monthNow = () => today().slice(0, 7);
@@ -78,14 +78,15 @@
       ['ministry-record-department', 'ministry-record-month', 'ministry-record-search'].forEach(id => f(id).addEventListener('input', render)); f('ministry-record-reset').addEventListener('click', () => { f('ministry-record-department').value = ''; f('ministry-record-month').value = ''; f('ministry-record-search').value = ''; render(); });
       f('ministry-due-rows').addEventListener('click', event => { const button = event.target.closest('button[data-action]'), due = dues.find(d => d.id === button?.closest('tr')?.dataset.dueId); if (!due) return; if (window.ChurchAccess?.canManageDue && !window.ChurchAccess.canManageDue(due)) return; if (button.dataset.action === 'edit') { showView('ministry'); prepare(due); const dialog = f('ministry-due-dialog'); if (dialog && !dialog.open) dialog.showModal(); } if (button.dataset.action === 'delete' && isAdmin() && window.confirm(`Delete the ministry due recorded for ${due.memberName}?`)) { dues = dues.filter(d => d.id !== due.id); persist(); render(); notify('Ministry due deleted.', 'success'); } });
       window.addEventListener('members-change', () => { fillMembers(); render(); }); window.addEventListener('departments-change', fillDepartments); window.addEventListener('department-renamed', e => { dues = dues.map(d => d.department === e.detail.from ? { ...d, department: e.detail.to } : d); persist(); fillDepartments(); });
+      window.ChurchDB?.onStoresChanged?.(['church-ministry-dues-v1', 'church-members-v1', 'church-departments-v1'], changedKeys => { const changed = Array.isArray(changedKeys) ? changedKeys : []; if (changed.includes(STORE)) dues = readList(STORE); if (changed.includes('church-members-v1')) window.churchMembers = readList('church-members-v1'); if (changed.some(key => ['church-ministry-dues-v1', 'church-members-v1', 'church-departments-v1'].includes(key))) fillDepartments(); });
       f('ministry-due-date').value = today(); f('ministry-due-month').value = monthNow(); fillDepartments(); showView('church');
     })();
 
 /* Church dues: general payments recorded against any registered member. */
     (() => {
       const STORE = 'church-general-dues-v1', f = id => document.getElementById(id);
-      let dues = [], editingId = null;
-      try { const saved = JSON.parse(localStorage.getItem(STORE) || '[]'); if (Array.isArray(saved)) dues = saved; } catch (_) {}
+      const readList = key => { try { const value = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(value) ? value : []; } catch (_) { return []; } };
+      let dues = readList(STORE), editingId = null;
       const today = () => new Date().toISOString().slice(0, 10), monthNow = () => today().slice(0, 7);
       const money = value => `GH₵${Number(value || 0).toFixed(2)}`;
       const members = () => { let list = []; if (Array.isArray(window.churchMembers)) list = window.churchMembers; else { try { const value = JSON.parse(localStorage.getItem('church-members-v1') || '[]'); if (Array.isArray(value)) list = value; } catch (_) {} } return list.filter(m => m.status !== 'Gone Soul'); };
@@ -118,6 +119,7 @@
       ['church-record-department', 'church-record-month', 'church-record-search'].forEach(id => f(id).addEventListener('input', render)); f('church-record-reset').addEventListener('click', () => { f('church-record-department').value = ''; f('church-record-month').value = ''; f('church-record-search').value = ''; render(); });
       f('church-due-rows').addEventListener('click', event => { const button = event.target.closest('button[data-action]'), due = dues.find(d => d.id === button?.closest('tr')?.dataset.dueId); if (!due) return; if (window.ChurchAccess?.canManageDue && !window.ChurchAccess.canManageDue(due)) return; if (button.dataset.action === 'edit') { editingId = due.id; f('church-due-error').textContent = ''; f('church-due-department').value = due.department || ''; fillMembers(); f('church-due-member').value = due.memberId; updateSummary(); f('church-due-amount').value = due.amount; f('church-due-date').value = due.paidOn; f('church-due-month').value = due.month; f('church-due-method').value = due.method; f('church-due-note').value = due.note || ''; const dialog = f('church-due-dialog'); if (dialog && !dialog.open) dialog.showModal(); f('church-due-amount').focus(); } if (button.dataset.action === 'delete' && isAdmin() && window.confirm(`Delete the church due recorded for ${due.memberName}?`)) { dues = dues.filter(d => d.id !== due.id); persist(); render(); notify('Church due deleted.', 'success'); } });
       window.addEventListener('members-change', () => { fillDepartments(); fillMembers(); render(); }); window.addEventListener('department-renamed', e => { dues = dues.map(d => d.department === e.detail.from ? { ...d, department: e.detail.to } : d); persist(); fillDepartments(); render(); });
+      window.ChurchDB?.onStoresChanged?.(['church-general-dues-v1', 'church-members-v1', 'church-departments-v1'], changedKeys => { const changed = Array.isArray(changedKeys) ? changedKeys : []; if (changed.includes(STORE)) dues = readList(STORE); if (changed.includes('church-members-v1')) window.churchMembers = readList('church-members-v1'); if (changed.some(key => ['church-general-dues-v1', 'church-members-v1', 'church-departments-v1'].includes(key))) { fillDepartments(); fillMembers(); render(); } });
       f('church-due-date').value = today(); f('church-due-month').value = monthNow(); fillDepartments(); fillMembers(); render();
     })();
 
@@ -169,6 +171,7 @@
       document.addEventListener('DOMContentLoaded', render);
       window.addEventListener('dues-change', render);
       window.addEventListener('storage', render);
+      window.ChurchDB?.onStoresChanged?.(['church-general-dues-v1', 'church-ministry-dues-v1'], render);
     })();
 
 /* Logs who recorded, changed or deleted a dues payment (Church dues and Ministry dues) to the Activity log. */
@@ -190,6 +193,7 @@
       }
       take();
       window.addEventListener('dues-change', onChange);
+      window.ChurchDB?.onStoresChanged?.(['church-general-dues-v1', 'church-ministry-dues-v1'], take);
     })();
     /* Short explanation under the Role field. */
     (() => {

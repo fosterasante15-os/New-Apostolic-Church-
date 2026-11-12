@@ -154,4 +154,14 @@
         }
       });
       render();
+      window.ChurchDB?.onStoresChanged?.([storageKey], () => {
+        let nextMinisters = [];
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          if (Array.isArray(saved)) nextMinisters = saved.filter(minister => minister && typeof minister === 'object' && typeof minister.name === 'string');
+        } catch (_) { /* Ignore malformed cloud data and keep the module renderable. */ }
+        ministers = nextMinisters;
+        window.churchMinisters = ministers;
+        render();
+      });
     })();

@@ -13,11 +13,13 @@
       updateActiveNavigation();
 
       const storageKey = 'church-reconstruction-announcements-v1';
-      let announcements = [];
-      try {
-        const saved = JSON.parse(localStorage.getItem(storageKey));
-        if (Array.isArray(saved)) announcements = saved;
-      } catch (_) { /* Storage may be disabled; in-memory actions still work. */ }
+      const readAnnouncements = () => {
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          return Array.isArray(saved) ? saved.filter(item => item && typeof item === 'object' && !Array.isArray(item)) : [];
+        } catch (_) { /* Storage may be disabled; in-memory actions still work. */ return []; }
+      };
+      let announcements = readAnnouncements();
       const cleanAnnouncements = announcements.filter(item => !/^seed-/.test(String(item.id || '')));
       if (cleanAnnouncements.length !== announcements.length) { announcements = cleanAnnouncements; try { localStorage.setItem(storageKey, JSON.stringify(announcements)); } catch (_) {} }
 
@@ -160,4 +162,8 @@
         }
       });
       render();
+      window.ChurchDB?.onStoresChanged?.([storageKey], () => {
+        announcements = readAnnouncements().filter(item => !/^seed-/.test(String(item.id || '')));
+        render();
+      });
     })();

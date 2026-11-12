@@ -1,11 +1,13 @@
 /* Departments: admins can create, edit and delete departments. Every department list in the app stays in sync. */
     (() => {
       const STORE = 'church-departments-v1';
-      let departments = [];
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORE));
-        if (Array.isArray(saved)) departments = saved;
-      } catch (_) {}
+      function readDepartments() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORE));
+          return Array.isArray(saved) ? saved.filter(department => department && typeof department === 'object') : [];
+        } catch (_) { return []; }
+      }
+      let departments = readDepartments();
       const cleanDepartments = departments.filter(department => !/^dept-seed-/.test(String(department.id || '')));
       if (cleanDepartments.length !== departments.length) { departments = cleanDepartments; try { localStorage.setItem(STORE, JSON.stringify(departments)); } catch (_) {} }
       window.churchDepartments = departments;
@@ -94,5 +96,10 @@
 
       /* Member counts come from the members module. */
       window.addEventListener('members-change', e => { counts = {}; (e.detail || []).forEach(m => { window.memberDepartments(m).forEach(d => { counts[d] = (counts[d] || 0) + 1; }); }); render(); });
+      window.ChurchDB?.onStoresChanged?.([STORE], () => {
+        departments = readDepartments().filter(department => !/^dept-seed-/.test(String(department.id || '')));
+        window.churchDepartments = departments;
+        fillSelects(); render();
+      });
       fillSelects(); render(); onRoute();
     })();

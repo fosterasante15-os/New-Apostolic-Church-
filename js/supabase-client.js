@@ -39,10 +39,14 @@
     client,
     url: SUPABASE_URL,
     anonKey: SUPABASE_ANON_KEY,
+    isValidAppSession: validAppSession,
     isConnected: false,
     isSyncing: false,
     reload() { location.reload(); },
-    syncNow() { return syncAll(); },
+    async syncNow() { const res = await syncAll(); afterSync(res); return res; },
+    onStoresChanged(storeKeys, callback) { return registerStoreRenderer(storeKeys, callback); },
+    deferViewUpdatesWhile(predicate) { viewUpdateGuards.add(predicate); return () => viewUpdateGuards.delete(predicate); },
+    resumeViewUpdates() { setTimeout(flushViewUpdates, 0); },
 
     // ----------------------------------------------------
     // AUTHENTICATION
@@ -104,6 +108,17 @@
       if (!client) return null;
       const { data } = await client.auth.getSession();
       return data?.session || null;
+    },
+
+    async appSessionForUser(user) { return verifiedAppProfile(user); },
+
+    async getAppSession() {
+      if (!client) return null;
+      const { data: saved, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !saved?.session?.access_token) return null;
+      const { data, error } = await client.auth.getUser();
+      if (error || !data?.user) return null;
+      return verifiedAppProfile(data.user);
     },
 
     // ----------------------------------------------------
@@ -212,7 +227,7 @@
       const res = await syncAll();
       if (res.ok && !silent && window.notify) window.notify('Synchronized with the Supabase cloud.', 'success', 'Cloud Synchronized');
       if (!res.ok && !silent) alert('Could not synchronize:\n\n' + res.errors.join('\n'));
-      afterSync(res, { force: !silent });
+      afterSync(res);
       return res.ok;
     },
 
@@ -226,7 +241,7 @@
       const res = await syncAll();
       if (!res.ok) { alert('Upload failed:\n\n' + res.errors.join('\n')); return false; }
       window.notify && window.notify('All records are synchronized with Supabase.', 'success', 'Upload Complete');
-      afterSync(res, { force: true });
+      afterSync(res);
       return true;
     },
 
@@ -246,6 +261,30 @@
       else { el.textContent = 'Sync v2 · Connecting…'; el.style.color = ''; }
     }
   };
+
+  function validAppSession(session) {
+    return !!session && typeof session === 'object' && !!session.id && !!session.email && session.isCloud === true
+      && ['main-admin', 'admin', 'account'].includes(String(session.role || '').trim().toLowerCase())
+      && String(session.status || '').trim().toLowerCase() === 'active';
+  }
+
+  async function verifiedAppProfile(user) {
+    if (!client || !user?.id || !user?.email) throw new Error('A valid Supabase sign-in is required.');
+    const { data: profile, error } = await client.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (error) throw new Error('Could not verify your account profile. Check your connection and try signing in again.');
+    if (!profile) throw new Error('Your account profile is missing. Ask the Main Admin to repair your account.');
+    const role = String(profile.role || '').trim().toLowerCase();
+    const status = String(profile.status || '').trim().toLowerCase();
+    if (status === 'pending') throw new Error('Your registration is pending approval by the Main Admin.');
+    if (status === 'declined') throw new Error('Your registration was declined. Please contact the Main Admin.');
+    if (status !== 'active') throw new Error('This account is inactive. Contact the Main Admin.');
+    if (!['main-admin', 'admin', 'account'].includes(role)) throw new Error('This account does not have access to the administration system.');
+    return {
+      id: user.id, email: user.email,
+      name: profile.name || profile.display_name || user.user_metadata?.name || String(user.email).split('@')[0],
+      role, status: 'Active', isCloud: true
+    };
+  }
 
   function readJson(k, fallback) {
     try {
@@ -502,9 +541,9 @@
   async function runOnce() {
     if (!client) return { ok: false, changed: false, errors: ['Supabase client not loaded'] };
     DB.isSyncing = true;
-    let changed = false; const errors = [];
+    let changed = false; const errors = [], changedStores = [];
     for (const name of Object.keys(COLLECTIONS)) {
-      try { const r = await syncCollection(name); changed = changed || r.changed; }
+      try { const r = await syncCollection(name); changed = changed || r.changed; if (r.changed) changedStores.push(COLLECTIONS[name].store); }
       catch (e) {
         const text = String((e && (e.message || e.details)) || e);
         if (COLLECTIONS[name].optional && /does not exist|schema cache|could not find the table|relation|PGRST205|42P01|404/i.test(text)) {
@@ -517,7 +556,7 @@
         else errors.push(name + ': ' + text);
       }
     }
-    try { const r = await syncSettings(); changed = changed || r.changed; }
+    try { const r = await syncSettings(); changed = changed || r.changed; if (r.changed) changedStores.push(STORES.settings); }
     catch (e) { errors.push('settings: ' + ((e && (e.message || e.details)) || e)); }
     DB.isSyncing = false;
     if (errors.length) {
@@ -531,34 +570,59 @@
     } else {
       lastErrorShown = ''; DB.isConnected = true; DB.updateStatusBadge('connected');
     }
-    return { ok: errors.length === 0, changed, errors };
+    return { ok: errors.length === 0, changed, changedStores, errors };
   }
 
-  // ---- page reload helpers (so screens show the merged data) ----
-  function reloadAllowed() {
-    try {
-      const now = Date.now();
-      const list = JSON.parse(sessionStorage.getItem('church-sync-reloads') || '[]').filter(t => now - t < 30000);
-      if (list.length >= 2) return false;
-      list.push(now); sessionStorage.setItem('church-sync-reloads', JSON.stringify(list)); return true;
-    } catch (_) { return true; }
+  // ---- refresh adopted cloud data without reloading or changing the route ----
+  const storeRenderers = new Set(), pendingRenderStores = new Set(), viewUpdateGuards = new Set();
+  function registerStoreRenderer(storeKeys, callback) {
+    if (!Array.isArray(storeKeys) || typeof callback !== 'function') return () => {};
+    const entry = { keys: new Set(storeKeys), callback };
+    storeRenderers.add(entry);
+    return () => storeRenderers.delete(entry);
   }
-  function safeToReload() {
+  function safeToRefreshViews() {
     const a = document.activeElement;
     if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
     if (document.querySelector('dialog[open]')) return false;
     if (/-(new|edit)$/.test(location.hash)) return false;
+    const settingsDirty = document.getElementById('settings-dirty');
+    if (settingsDirty && !settingsDirty.hidden) return false;
+    for (const predicate of viewUpdateGuards) { try { if (predicate()) return false; } catch (_) { return false; } }
     return true;
   }
-  function afterSync(res, { force } = {}) {
-    if (!res || !res.changed) return;
-    if ((force || safeToReload()) && reloadAllowed()) DB.reload();
-    else if (window.notify) window.notify('Another device made changes. Refresh the page to see them.', 'info', 'New changes');
+  function flushViewUpdates() {
+    if (!pendingRenderStores.size || !safeToRefreshViews()) return;
+    const changedStores = [...pendingRenderStores];
+    pendingRenderStores.clear();
+    const x = window.scrollX || 0, y = window.scrollY || 0;
+    storeRenderers.forEach(entry => {
+      if (!changedStores.some(key => entry.keys.has(key))) return;
+      try { entry.callback(changedStores); } catch (error) { console.warn('[Cloud view refresh]', error.message || 'A view could not update.'); }
+    });
+    window.dispatchEvent(new CustomEvent('church-data-change', { detail: { stores: changedStores } }));
+    if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
   }
+  function queueViewUpdates(stores) {
+    stores.forEach(key => pendingRenderStores.add(key));
+    flushViewUpdates();
+  }
+  function afterSync(res) {
+    if (!res || !res.changed) return;
+    queueViewUpdates(res.changedStores || []);
+  }
+  document.addEventListener('focusout', () => setTimeout(flushViewUpdates, 0));
+  document.addEventListener('close', () => setTimeout(flushViewUpdates, 0), true);
+  window.addEventListener('hashchange', () => setTimeout(flushViewUpdates, 0));
+  window.addEventListener('storage', event => {
+    if (event.key && (STORE_TO_COLLECTION[event.key] || event.key === STORES.settings)) queueViewUpdates([event.key]);
+  });
 
   // ---- watch saves: any change to a synced store is uploaded shortly after ----
   let timer = null;
   function scheduleSync(ms) {
+    // The sign-in page must not upload records or interrupt authentication.
+    if (!document.getElementById('dashboard')) return;
     clearTimeout(timer);
     timer = setTimeout(() => { syncAll().then(r => afterSync(r)); }, ms || 700);
   }
@@ -569,6 +633,7 @@
 
   // ---- start-up: sync once the page is ready, and again whenever the device comes back online / the tab is reopened ----
   document.addEventListener('DOMContentLoaded', async () => {
+    if (!document.getElementById('dashboard')) return;
     DB.updateStatusBadge('connecting');
     const test = await DB.testConnection();
     if (!test.ok) {
@@ -578,10 +643,10 @@
       return;
     }
     const res = await syncAll();
-    afterSync(res, { force: true });
+    afterSync(res);
   });
-  document.addEventListener('DOMContentLoaded', () => { try { DB.flushRegistrationOutbox(); } catch (_) {} });
-  window.addEventListener('online', () => { scheduleSync(1500); try { DB.flushRegistrationOutbox(); } catch (_) {} });
+  document.addEventListener('DOMContentLoaded', () => { if (document.getElementById('dashboard')) { try { DB.flushRegistrationOutbox(); } catch (_) {} } });
+  window.addEventListener('online', () => { scheduleSync(1500); if (document.getElementById('dashboard')) { try { DB.flushRegistrationOutbox(); } catch (_) {} } });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSync(1500); });
   window.ChurchDB = DB;
 })();

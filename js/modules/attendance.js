@@ -6,16 +6,25 @@
       const eventSel = $('attendance-event'), calendarButton = $('attendance-calendar-button'), calendar = $('attendance-calendar'), deptSel = $('attendance-department'), search = $('attendance-search'), summary = $('attendance-summary');
       const STATUSES = ['present', 'late', 'absent', 'excused'];
       let draft = {}, draftKey = null;
+      const draftChanges = new Set();
 
-      const readAll = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } };
+      const readAll = () => { try { const v = JSON.parse(localStorage.getItem(KEY)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } };
+      const readMembers = () => { try { const v = JSON.parse(localStorage.getItem(MEMBERS)); return Array.isArray(v) ? v.filter(m => m && typeof m === 'object' && !Array.isArray(m)) : []; } catch (_) { return []; } };
       function members() {
         let list = [];
         if (Array.isArray(window.churchMembers)) list = window.churchMembers;
-        else { try { const v = JSON.parse(localStorage.getItem(MEMBERS)); if (Array.isArray(v)) list = v; } catch (_) {} }
+        else list = readMembers();
         return list.filter(m => m.status !== 'Gone Soul');          /* Gone Souls are not on the attendance roster */
       }
       const serviceKey = () => eventSel ? eventSel.value : '';
-      function loadDraft() { draftKey = serviceKey(); draft = { ...(readAll()[draftKey] || {}) }; }
+      function loadDraft() { draftKey = serviceKey(); const value = readAll()[draftKey]; draft = value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {}; draftChanges.clear(); }
+      function mergeDraftFromCloud() {
+        if (serviceKey() !== draftKey) { loadDraft(); return; }
+        const saved = readAll()[draftKey];
+        const next = saved && typeof saved === 'object' && !Array.isArray(saved) ? { ...saved } : {};
+        draftChanges.forEach(id => { if (draft[id]) next[id] = draft[id]; });
+        draft = next;
+      }
       const statusOf = id => draft[id] || 'present';
       function syncCalendarToService() {
         if (calendar) calendar.value = (serviceKey().split(' · ')[0] || '');
@@ -63,7 +72,7 @@
             const td = document.createElement('td'); td.style.textAlign = 'center';
             const r = document.createElement('input'); r.type = 'radio'; r.name = `attendance-${m.id}`; r.value = st;
             r.checked = statusOf(m.id) === st; r.setAttribute('aria-label', `${st[0].toUpperCase() + st.slice(1)}: ${m.name || m.id}`);
-            r.addEventListener('change', () => { draft[m.id] = st; updateSummary(visible()); });
+            r.addEventListener('change', () => { draft[m.id] = st; draftChanges.add(m.id); updateSummary(visible()); });
             td.append(r); tr.append(td);
           });
           body.append(tr);
@@ -71,7 +80,7 @@
         updateSummary(list);
       }
 
-      function markAll(st) { visible().forEach(m => { draft[m.id] = st; }); render(); }
+      function markAll(st) { visible().forEach(m => { draft[m.id] = st; draftChanges.add(m.id); }); render(); }
       $('attendance-all-present').addEventListener('click', () => markAll('present'));
       $('attendance-all-absent').addEventListener('click', () => markAll('absent'));
       calendarButton?.addEventListener('click', () => {
@@ -86,7 +95,7 @@
         const all = readAll(), rec = { ...(all[draftKey] || {}) };
         list.forEach(m => { rec[m.id] = statusOf(m.id); });
         all[draftKey] = rec;
-        try { localStorage.setItem(KEY, JSON.stringify(all)); window.dispatchEvent(new CustomEvent('attendance-change')); window.notify && window.notify(`Attendance saved for ${list.length} member${list.length === 1 ? '' : 's'}.`, 'success'); }
+        try { localStorage.setItem(KEY, JSON.stringify(all)); list.forEach(m => draftChanges.delete(m.id)); window.dispatchEvent(new CustomEvent('attendance-change')); window.notify && window.notify(`Attendance saved for ${list.length} member${list.length === 1 ? '' : 's'}.`, 'success'); }
         catch (_) { window.notify && window.notify('Could not save in browser storage.', 'error'); }
         render();
       });
@@ -95,7 +104,7 @@
       const GKEY = 'church-guests-v1';
       const guestRows = $('guest-rows'), guestSummary = $('guest-summary'), guestDialog = $('guest-dialog'), guestForm = $('guest-form');
       let guestShowAll = false, guestEditing = null;
-      const readGuests = () => { try { const v = JSON.parse(localStorage.getItem(GKEY)); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+      const readGuests = () => { try { const v = JSON.parse(localStorage.getItem(GKEY)); return Array.isArray(v) ? v.filter(g => g && typeof g === 'object' && !Array.isArray(g)) : []; } catch (_) { return []; } };
       const writeGuests = list => { try { localStorage.setItem(GKEY, JSON.stringify(list)); return true; } catch (_) { window.notify && window.notify('Could not save in browser storage.', 'error'); return false; } };
       function guestsFor(key) { return readGuests().filter(g => g.serviceKey === key); }
       const dateOf = key => String(key || '').split(' · ')[0];
@@ -172,5 +181,11 @@
       if (deptSel) deptSel.addEventListener('change', render);
       search.addEventListener('input', render);
       window.addEventListener('members-change', render);
+      window.addEventListener('services-change', () => { mergeDraftFromCloud(); render(); syncCalendarToService(); });
+      window.ChurchDB?.onStoresChanged?.([KEY, MEMBERS, GKEY], () => {
+        window.churchMembers = readMembers();
+        mergeDraftFromCloud();
+        render();
+      });
       loadDraft(); render(); syncCalendarToService();
     })();

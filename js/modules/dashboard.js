@@ -44,7 +44,7 @@
         }
 
         const ministerCards = document.getElementById('dash-minister-cards');
-        if (ministerCards && ministers.length) {
+        if (ministerCards) {
           ministerCards.replaceChildren();
           ministers.slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)).forEach(minister => {
             const card = document.createElement('article'); card.className = 'minister-card';
@@ -57,5 +57,6 @@
         }
       }
       ['members-change', 'services-change', 'dues-change', 'ministers-change', 'church-profile-change'].forEach(event => window.addEventListener(event, render));
+      window.ChurchDB?.onStoresChanged?.(['church-members-v1', 'church-services-v1', 'church-general-dues-v1', 'church-ministry-dues-v1', 'church-reconstruction-ministers-v1'], render);
       render(); setTimeout(render, 0);
     })();

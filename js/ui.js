@@ -115,6 +115,7 @@
         window.notify?.('Your profile has been updated.', 'success', 'Profile saved');
       });
       window.addEventListener('storage', e => { if (e.key === KEY) render(); });
+      window.ChurchDB?.onStoresChanged?.([KEY], () => { if (mine().name) access?.setName?.(mine().name); render(); });
     })();
 
 /* Light / dark theme switch (moon = go dark, sun = go light). The choice is remembered per browser. */

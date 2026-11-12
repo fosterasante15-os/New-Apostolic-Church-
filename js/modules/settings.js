@@ -113,6 +113,14 @@
       } catch (_) { applySettings(); }
       applyProfile();
 
+      window.ChurchDB?.onStoresChanged?.([storageKey], () => {
+        if (dirty && !dirty.hidden) return;
+        const state = savedState();
+        applySettings(state.values, state.logo);
+        applyProfile();
+        window.dispatchEvent(new CustomEvent('maintenance-change'));
+      });
+
       function readDataUrl(blob) {
         return new Promise((resolve,reject) => {
           const reader = new FileReader();

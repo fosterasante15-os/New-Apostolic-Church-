@@ -30,6 +30,7 @@
       window.addEventListener('hashchange', () => { if (location.hash === '#activity') render(); });
       window.addEventListener('activity-change', render);
       window.addEventListener('storage', e => { if (e.key === KEY) render(); });
+      window.ChurchDB?.onStoresChanged?.([KEY], render);
     })();
 
 (() => {

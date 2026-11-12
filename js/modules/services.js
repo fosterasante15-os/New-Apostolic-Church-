@@ -109,5 +109,17 @@
           services = services.filter(x => x.id !== v.id); persist(); render(); notice.textContent = `Sunday service on ${v.date} deleted.`;
         }
       });
+      window.ChurchDB?.onStoresChanged?.([STORE], () => {
+        let next = [];
+        try {
+          const raw = localStorage.getItem(STORE);
+          const saved = typeof raw === 'string' ? JSON.parse(raw) : null;
+          if (Array.isArray(saved)) next = saved.filter(service => service && typeof service === 'object' && !Array.isArray(service) && !/^svc-seed-/.test(String(service.id || '')));
+        } catch (_) {}
+        services = next;
+        window.churchServices = services;
+        render();
+        window.dispatchEvent(new CustomEvent('services-change'));
+      });
       render(); onRoute();
     })();
