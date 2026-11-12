@@ -4,7 +4,7 @@
       if (!body) return;
       const read = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
       const ROLE = { 'main-admin': 'Main admin', admin: 'Admin', account: 'Account', member: 'Member' };
-      const ACTION = { create: ['Create', 'published'], update: ['Update', 'published'], delete: ['Delete', 'draft'], login: ['Login', 'published'], 'login-failed': ['Failed login', 'draft'] };
+      const ACTION = { create: ['Create', 'published'], update: ['Update', 'published'], delete: ['Delete', 'draft'], login: ['Login', 'published'], logout: ['Logout', 'draft'], 'login-failed': ['Failed login', 'draft'] };
       const ENTITY = { due: 'Dues', user: 'User' };
       const day = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       function render() {

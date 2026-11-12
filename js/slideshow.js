@@ -54,14 +54,23 @@
       const closeLogoutDialog = () => { if (logoutDialog?.open) logoutDialog.close(); };
       document.getElementById('logout-button')?.addEventListener('click', () => { if (logoutDialog?.showModal) logoutDialog.showModal(); });
       document.getElementById('logout-stay')?.addEventListener('click', closeLogoutDialog);
-      document.getElementById('logout-confirm')?.addEventListener('click', () => {
+      document.getElementById('logout-confirm')?.addEventListener('click', async () => {
         try {
           const current = JSON.parse(sessionStorage.getItem('church-auth-v1') || 'null');
           const list = JSON.parse(localStorage.getItem('church-reconstruction-users-v1') || '[]');
+          const when = new Date().toISOString();
           if (current && Array.isArray(list)) {
-            const when = new Date().toISOString();
             localStorage.setItem('church-reconstruction-users-v1', JSON.stringify(list.map(user => user.id === current.id ? { ...user, current: false, lastLogout: when } : user)));
           }
+          if (current) {
+            const activity = JSON.parse(localStorage.getItem('church-activity-v1') || '[]');
+            const entries = Array.isArray(activity) ? activity : [];
+            entries.push({ id: `a-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, at: when, entity: 'user', action: 'logout', userId: current.id || 'unknown', userName: current.name || String(current.email || '').split('@')[0], role: current.role || '', summary: 'Signed out of the administration system', data: { email: current.email || '' } });
+            localStorage.setItem('church-activity-v1', JSON.stringify(entries.slice(-500)));
+          }
+          // Navigation can cancel the delayed storage watcher; flush the logout event first.
+          if (window.ChurchDB?.syncNow) await Promise.race([window.ChurchDB.syncNow(), new Promise(resolve => setTimeout(resolve, 2500))]);
+          if (window.ChurchDB?.signOut) await window.ChurchDB.signOut();
           sessionStorage.removeItem('church-auth-v1');
         } catch (_) {}
         location.replace('login.html?loggedout=1&from=index.html');

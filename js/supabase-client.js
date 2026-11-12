@@ -42,6 +42,7 @@
     isConnected: false,
     isSyncing: false,
     reload() { location.reload(); },
+    syncNow() { return syncAll(); },
 
     // ----------------------------------------------------
     // AUTHENTICATION
