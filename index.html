@@ -776,10 +776,10 @@
   </dialog>
   <dialog id="user-dialog" aria-labelledby="user-dialog-title">
     <form class="dialog-form" id="user-form">
-      <h2 id="user-dialog-title">Add user</h2>
+      <h2 id="user-dialog-title">User profile</h2>
       <label for="user-email">Email<input id="user-email" name="email" type="email" maxlength="160" placeholder="name@example.com" autocomplete="email" required></label>
       <label for="user-password">Password<input id="user-password" name="password" type="password" minlength="8" placeholder="At least 8 characters" autocomplete="new-password"></label>
-      <p class="upload-help">A password is required when registering a new account. Leave it blank when editing to keep the current password.</p>
+      <p class="upload-help">This page edits an existing Supabase profile. To create a real login that works on every device, the person must choose “Register” on the sign-in page, verify their email, and wait for Main Admin approval. Do not create browser-only passwords here.</p>
             <label for="user-role">Role<select id="user-role" name="role"><option value="member">Member</option><option value="admin">Admin</option><option value="account">Account — dues only</option><option value="main-admin">Main admin — full access</option></select><small class="user-role-hint" id="user-role-hint"></small></label>
       <label for="user-status">Status<select id="user-status" name="status"><option value="Active">Active</option><option value="Pending">Pending approval</option><option value="Inactive">Inactive</option><option value="Locked">Locked</option><option value="Blocked">Blocked</option></select></label>
       <div class="dialog-actions"><button class="plain-button" id="user-cancel" type="button">Cancel</button><button class="primary-button" id="user-save" type="submit">Save user</button></div>

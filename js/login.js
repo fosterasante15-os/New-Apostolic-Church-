@@ -83,6 +83,7 @@
         console.log('[Supabase Auth fallback]', err.message);
         if (/not confirmed/i.test(err.message || '')) throw new Error('Please confirm your email address using the link we sent you, then wait for the Main Admin to approve your account.');
         if (/pending approval|inactive|declined|Member accounts/i.test(err.message)) throw err;
+        if (/invalid login credentials|invalid credentials|user not found/i.test(err.message || '')) throw new Error('Login failed because this email/password is not registered in Supabase Auth. Ask the user to choose Register on this sign-in page, verify the email, and wait for Main Admin approval.');
       }
     }
 

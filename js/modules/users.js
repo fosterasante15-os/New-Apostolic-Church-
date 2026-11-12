@@ -228,7 +228,7 @@
     if (approveMode) values.status = selectedStatus || 'Active';
 
     if (!editingId && !approveMode) {
-      window.notify?.('New accounts must be registered through the sign-in page so the password is stored securely in Supabase Auth.', 'info', 'Use registration');
+      window.notify?.('This form cannot create a cross-device login. Ask the person to choose Register on the sign-in page, verify their email, then approve the pending request here.', 'info', 'Use Supabase registration');
       return;
     }
     if (resetMode) {
