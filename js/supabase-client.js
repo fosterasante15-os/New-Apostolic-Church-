@@ -13,6 +13,7 @@
       auth: {
         persistSession: true,
         autoRefreshToken: true,
+        detectSessionInUrl: !window.__passwordRecoveryContext,
         storage: window.localStorage
       }
     });
@@ -102,6 +103,15 @@
       if (response.status === 401) throw sessionError();
       if (!response.ok) throw new Error(result.error || 'Supabase could not create the account.');
       return result;
+    },
+
+    async resetUserPassword(payload) { return authenticatedRequest('/api/admin-reset-password', { body: payload }); },
+    async recordLoginSession() { return authenticatedRequest('/api/session-profile', { body: { recordLogin: true } }); },
+    async listUserDirectory() {
+      const result = await authenticatedRequest('/api/user-directory', { method: 'GET' });
+      if (!Array.isArray(result.users)) throw new Error('The server returned an invalid user directory.');
+      this.directoryWarning = result.warning || '';
+      return result.users;
     },
 
     async getSession() {
@@ -295,8 +305,29 @@
     return {
       id: user.id, email: user.email,
       name: profile.name || profile.display_name || user.user_metadata?.name || String(user.email).split('@')[0],
-      role, status: 'Active', isCloud: true
+      role, status: 'Active', isCloud: true,
+      lastLogin: user.last_sign_in_at || profile.last_login || profile.lastLogin || null
     };
+  }
+
+  async function authenticatedRequest(path, { method = 'POST', body } = {}) {
+    if (!client) throw new Error('Supabase is not available. Check your connection.');
+    const current = await client.auth.getSession();
+    let session = current.data?.session;
+    if (current.error || !session?.access_token || (session.expires_at && session.expires_at * 1000 <= Date.now() + 60000)) {
+      session = (await client.auth.refreshSession()).data?.session;
+    }
+    if (!session?.access_token) throw new Error('Your sign-in expired. Please sign in again.');
+    const request = token => fetch(path, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    let response = await request(session.access_token);
+    if (response.status === 401) {
+      const refreshed = await client.auth.refreshSession();
+      if (refreshed.data?.session?.access_token) response = await request(refreshed.data.session.access_token);
+    }
+    let result = {}; try { result = await response.json(); } catch (_) {}
+    if (response.status === 401) throw new Error('Your sign-in expired. Please sign in again.');
+    if (!response.ok) throw new Error(result.error || 'The account request could not be completed.');
+    return result;
   }
 
   function readJson(k, fallback) {

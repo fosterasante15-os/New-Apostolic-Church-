@@ -16,7 +16,7 @@
     input { width:100%; min-height:43px; padding:9px 11px; border:1px solid #cfdbe1; border-radius:8px; color:var(--ink); background:#fff; font:inherit; font-weight:400; outline:none; }
     input:focus { border-color:var(--brand-600); box-shadow:0 0 0 3px rgba(36,127,156,.14); }
     .password-wrap { position:relative; }
-    .password-wrap input { padding-right:48px; }
+    .password-wrap input { padding-right:72px; }
     .show-password { position:absolute; right:0; top:0; height:43px; padding:0 12px; border:0; background:transparent; color:#647481; font-size:16px; cursor:pointer; }
     .submit { min-height:43px; border:0; border-radius:8px; color:#fff; background:linear-gradient(135deg,var(--brand-600),var(--brand-800)); font:inherit; font-weight:700; cursor:pointer; }
     .submit:hover { filter:brightness(.95); }

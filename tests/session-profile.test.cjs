@@ -69,3 +69,35 @@ test('database failures never trigger owner creation', async () => {
   const e = endpoint([reply(200, { ...actor, email: 'fosterasante15@gmail.com' }), reply(403, {})]);
   assert.equal((await invoke(e)).code, 502); assert.equal(e.calls.length, 2);
 });
+
+test('recordLogin persists only the verified Auth sign-in time, not a supplied date', async () => {
+  const when = '2026-11-13T00:12:01.000Z';
+  const e = endpoint([reply(200, { ...actor, last_sign_in_at: when }), reply(200, [profile]), reply(200, [{ ...profile, last_login: when }])]);
+  const res = await invoke(e, { body: { recordLogin: true, lastLogin: '2099-01-01T00:00:00Z', userId: 'another-user' } });
+  assert.equal(res.code, 200); assert.equal(res.body.lastLogin, when); assert.equal(res.body.loginTimeSaved, true);
+  assert.equal(e.calls[2].method, 'PATCH'); assert.deepEqual(JSON.parse(e.calls[2].body), { last_login: when });
+  assert.match(e.calls[2].url, /id=eq\.own-auth-id$/);
+});
+test('inactive or member profiles cannot record a successful administration login', async () => {
+  for (const change of [{ status: 'Blocked' }, { role: 'member' }]) {
+    const e = endpoint([reply(200, { ...actor, last_sign_in_at: '2026-11-13T00:00:00Z' }), reply(200, [{ ...profile, ...change }])]);
+    assert.equal((await invoke(e, { body: { recordLogin: true } })).code, 403); assert.equal(e.calls.length, 2);
+  }
+});
+test('ordinary restored-profile lookups do not advance login timestamps', async () => {
+  const e = endpoint([reply(200, { ...actor, last_sign_in_at: '2026-11-13T00:00:00Z' }), reply(200, [profile])]);
+  assert.equal((await invoke(e)).body.loginTimeSaved, false); assert.equal(e.calls.length, 2);
+});
+test('a missing Auth sign-in timestamp cannot be replaced with client input', async () => {
+  const e = endpoint([reply(200, actor), reply(200, [profile])]);
+  const res = await invoke(e, { body: { recordLogin: true, lastLogin: '2099-01-01' } });
+  assert.equal(res.body.loginTimeSaved, false); assert.equal(res.body.lastLogin, null); assert.equal(e.calls.length, 2);
+});
+
+test('a failed timestamp PATCH reports that sign-in time was not saved', async () => {
+  const when = '2026-11-13T00:12:01Z';
+  const e = endpoint([reply(200, { ...actor, last_sign_in_at: when }), reply(200, [profile]), reply(403, {})]);
+  const res = await invoke(e, { body: { recordLogin: true } });
+  assert.equal(res.code, 502); assert.equal(res.body.loginTimeSaved, false); assert.equal(res.body.lastLogin, when);
+  assert.match(res.body.error, /could not be saved/);
+});

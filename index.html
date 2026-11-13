@@ -779,7 +779,8 @@
       <h2 id="user-dialog-title">Add user</h2>
       <label for="user-name">Full name<input id="user-name" name="name" type="text" maxlength="120" placeholder="Full name" autocomplete="name"></label>
       <label for="user-email">Email<input id="user-email" name="email" type="email" maxlength="160" placeholder="name@example.com" autocomplete="email" required></label>
-      <label for="user-password">Password<input id="user-password" name="password" type="password" minlength="8" placeholder="At least 8 characters" autocomplete="new-password"></label>
+      <label for="user-password">Password<span style="display:flex;align-items:center;gap:8px"><input id="user-password" name="password" type="password" minlength="8" placeholder="At least 8 characters" autocomplete="new-password" style="min-width:0;flex:1"><button class="plain-button" id="user-show-password" type="button" data-password-toggle="user-password" aria-controls="user-password" aria-label="Show password" aria-pressed="false">Show</button></span></label>
+      <p class="upload-help">Show reveals only the password you are typing. Stored account passwords cannot be viewed.</p>
       <p class="upload-help">Main Admins can create a real Supabase login here. The email, password, name, role, and status are saved to Supabase Auth and the profile database so the user can sign in on any device.</p>
             <label for="user-role">Role<select id="user-role" name="role"><option value="member">Member</option><option value="admin">Admin</option><option value="account">Account — dues only</option><option value="main-admin">Main admin — full access</option></select><small class="user-role-hint" id="user-role-hint"></small></label>
       <label for="user-status">Status<select id="user-status" name="status"><option value="Active">Active</option><option value="Pending">Pending approval</option><option value="Inactive">Inactive</option><option value="Locked">Locked</option><option value="Blocked">Blocked</option></select></label>
@@ -788,7 +789,8 @@
   </dialog>
   <!-- Supabase Cloud SDK & Data Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-  <script src="js/supabase-client.js?v=20261113-profile1"></script>
+  <script src="js/supabase-client.js?v=20261113-password1"></script>
+  <script src="js/password-visibility.js?v=20261113-password1"></script>
 
   <!-- Core Security & Infrastructure -->
   <script src="js/access.js?v=20261112-refresh1"></script>
@@ -805,7 +807,7 @@
   <script src="js/modules/attendance.js?v=20261112-refresh1"></script>
   <script src="js/modules/ministers.js?v=20261112-refresh1"></script>
   <script src="js/modules/announcements.js?v=20261112-refresh1"></script>
-  <script src="js/modules/users.js?v=20261112-auth3"></script>
+  <script src="js/modules/users.js?v=20261113-password1"></script>
   <script src="js/modules/activity.js?v=20261112-refresh1"></script>
   <script src="js/modules/reports.js?v=20261112-refresh1"></script>
   <script src="js/modules/settings.js?v=20261112-refresh1"></script>

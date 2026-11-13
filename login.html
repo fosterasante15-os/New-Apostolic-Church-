@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="NAC Kumasi">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="css/login.css?v=20261115">
+  <link rel="stylesheet" href="css/login.css?v=20261113-password1">
   <script>
     /* Theme is applied before first paint so the page never flashes the wrong colours. */
     (function () { try { var t = localStorage.getItem('church-theme-v1'); document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); } catch (_) { document.documentElement.setAttribute('data-theme', 'light'); } })();
@@ -31,17 +31,19 @@
       <p class="subtitle">Church Management System</p>
       <form id="auth-form" novalidate>
         <label for="auth-email">Email<input id="auth-email" type="email" autocomplete="username" required></label>
-        <label for="auth-password">Password<div class="password-wrap"><input id="auth-password" type="password" autocomplete="current-password" required><button class="show-password" id="show-password" type="button" aria-label="Show password" aria-pressed="false">◉</button></div></label>
+        <label for="auth-password">Password<div class="password-wrap"><input id="auth-password" type="password" autocomplete="current-password" required><button class="show-password" id="show-password" type="button" data-password-toggle="auth-password" aria-controls="auth-password" aria-label="Show password" aria-pressed="false">Show</button></div></label>
         <p class="message" id="auth-message" role="alert" aria-live="polite"></p>
         <button class="submit" id="auth-submit" type="submit">Sign in</button>
       </form>
+      <p style="text-align:center;margin:16px 0 0"><a href="reset-password.html" style="color:var(--brand-700)">Forgot password?</a></p>
     </section>
   </main>
 
   <!-- Supabase Cloud SDK & Data Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-  <script src="js/supabase-client.js?v=20261113-profile1"></script>
-  <script src="js/login.js?v=20261112-refresh1"></script>
+  <script src="js/supabase-client.js?v=20261113-password1"></script>
+  <script src="js/password-visibility.js?v=20261113-password1"></script>
+  <script src="js/login.js?v=20261113-password1"></script>
   <script src="js/pwa.js?v=20261115"></script>
 </body>
 </html>

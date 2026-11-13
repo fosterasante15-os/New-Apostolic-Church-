@@ -21,11 +21,10 @@
       localStorage.setItem(ACT_KEY, JSON.stringify(arr.slice(-500)));
     } catch (_) {}
   }
-  function recordLogin(user) {
+  function recordLogin(user, when) {
     try {
       const list = readJson(USERS_KEY, []);
       if (!Array.isArray(list)) return;
-      const when = new Date().toISOString();
       const next = list.map(item => item.id === user.id ? { ...item, email: user.email, lastLogin: when, current: true } : { ...item, current: false });
       localStorage.setItem(USERS_KEY, JSON.stringify(next));
     } catch (_) {}
@@ -40,12 +39,6 @@
   const settings = readJson(SETTINGS_KEY, null);
   const name = settings && settings.values && String(settings.values.churchName || '').trim();
   if (name) { $('church-name').textContent = name; document.title = `Sign in — ${name}`; }
-
-  $('show-password').addEventListener('click', event => {
-    const visible = $('auth-password').type === 'text';
-    $('auth-password').type = visible ? 'password' : 'text';
-    event.currentTarget.setAttribute('aria-pressed', String(!visible)); event.currentTarget.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
-  });
 
   async function authenticate(email, pw) {
     if (!window.ChurchDB?.client) throw new Error('Secure sign-in needs the Supabase connection. Check your connection and refresh the sign-in page.');
@@ -76,8 +69,14 @@
     try {
       const session = await authenticate(email, pw);
       if (!window.ChurchDB.isValidAppSession(session)) throw new Error('This account does not have active administration access.');
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...session, signedInAt: new Date().toISOString() }));
-      recordLogin(session);
+      let when = session.lastLogin || new Date().toISOString();
+      let loginTimeWarning = '';
+      try {
+        const recorded = await window.ChurchDB.recordLoginSession();
+        if (recorded.lastLogin) when = recorded.lastLogin;
+      } catch (error) { loginTimeWarning = error.message || 'The profile login time could not be saved. The Auth sign-in time remains available.'; }
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...session, lastLogin: when, signedInAt: when, loginTimeWarning }));
+      recordLogin(session, when);
       logActivity({ action: 'login', userId: session.id, userName: session.name, role: session.role, summary: 'Signed in to the administration system', data: { email: session.email } });
       location.replace(HOME);
     } catch (error) {
@@ -96,7 +95,7 @@
       const session = await window.ChurchDB.getAppSession();
       if (manualSignInStarted || $('auth-email').value || $('auth-password').value) return;
       if (!window.ChurchDB.isValidAppSession(session)) { clearAppSession(); return; }
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...session, signedInAt: cached?.signedInAt || new Date().toISOString() }));
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...session, signedInAt: cached?.signedInAt || session.lastLogin || null, loginTimeWarning: cached?.loginTimeWarning || '' }));
       location.replace(HOME);
     } catch (error) {
       if (manualSignInStarted) return;

@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
     const auth = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SERVER_KEY, Authorization: `Bearer ${token}` } });
     const actor = auth.ok ? await auth.json() : null;
     if (!actor?.id || !actor?.email) return json(res, 401, { error: 'Your sign-in expired. Please sign in again.' });
-    const query = `profiles?id=eq.${encodeURIComponent(actor.id)}&select=id,email,name,role,status&limit=1`;
+    const query = `profiles?id=eq.${encodeURIComponent(actor.id)}&select=*&limit=1`;
     let result = await profileRequest(query);
     if (!result.response.ok) return json(res, 502, { error: 'The server could not read your account profile. Check the profiles table configuration.' });
     let profile = Array.isArray(result.data) ? result.data[0] : null;
@@ -54,9 +54,22 @@ module.exports = async function handler(req, res) {
       profile = Array.isArray(result.data) ? result.data[0] : null;
     }
     if (!profile || profile.id !== actor.id) return json(res, 404, { error: 'Your account profile could not be verified.' });
+    let input = {}; try { input = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}); } catch (_) { return json(res, 400, { error: 'Invalid request.' }); }
+    let loginTimeSaved = false;
+    const when = actor.last_sign_in_at && !Number.isNaN(Date.parse(actor.last_sign_in_at)) ? actor.last_sign_in_at : null;
+    if (input.recordLogin === true) {
+      const approved = ['main-admin', 'admin', 'account'].includes(String(profile.role || '').trim().toLowerCase()) && String(profile.status || '').trim().toLowerCase() === 'active';
+      if (!approved) return json(res, 403, { error: 'This account does not have active administration access.' });
+      if (when) {
+        const saved = await profileRequest(`profiles?id=eq.${encodeURIComponent(actor.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ last_login: when }) });
+        loginTimeSaved = saved.response.ok && Array.isArray(saved.data) && saved.data.some(row => row.id === actor.id);
+        if (!loginTimeSaved) return json(res, 502, { error: 'Sign-in succeeded, but the profile login time could not be saved. Check profiles.last_login and server permissions.', lastLogin: when, loginTimeSaved: false });
+        if (loginTimeSaved) profile = { ...profile, last_login: when };
+      }
+    }
     // Returning a profile does not grant access: the client still checks its
     // authoritative role/status. Existing inactive/member profiles are unchanged.
-    return json(res, 200, { profile: { id: actor.id, email: actor.email, name: profile.name || '', role: profile.role, status: profile.status } });
+    return json(res, 200, { profile: { id: actor.id, email: actor.email, name: profile.name || '', role: profile.role, status: profile.status, lastLogin: profile.last_login || when }, lastLogin: when || profile.last_login || null, loginTimeSaved });
   } catch (_) {
     return json(res, 502, { error: 'Could not reach the account profile service. Please try signing in again.' });
   }

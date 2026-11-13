@@ -15,6 +15,12 @@
 - [ ] Confirm the live deployment serves refresh1 scripts and have the user verify behavior on their actual phone/computer. Physical-device authenticated testing is not available to the agent.
 - [x] Repair existing-account profile lookup without restoring unsafe metadata-based Admin defaults. Use a verified caller's server-side profile lookup by its own Auth ID; preserve existing roles/statuses and bootstrap only the already designated, confirmed Foster owner when its profile is absent. Do not copy permissions from email-matched profiles or request/user metadata. A profile tied to another Auth ID is a conflict, not an automatic relink; concurrent blocked profiles are never overwritten.
 - [x] All 61 dependency-free mocked/static regression tests passed, including protected profile lookup, owner-only recovery, confirmed-email requirements, identity conflicts, blocked-state preservation, and browser fallback identity matching. No live profiles were created during testing; recovery occurs only on the user's verified sign-in request.
+- [x] Show actual login date/time in Users and the current session, with timestamps saved in Supabase so other devices see them. Do not replace the time with only Current session. Uses verified Auth last_sign_in_at, profile last_login PATCH, and a protected Main Admin directory for historical sign-ins. Reopened tabs retain original session time. Failed timestamp saves return an explicit error/warning rather than claiming persistence.
+- [x] Allow active Main Admins to reset forgotten passwords securely in Supabase Auth, including their own account while signed in. Keep roles and blocked/inactive statuses unchanged; show success only after Auth confirms the change; never save passwords or hashes to browser storage. The protected backend verifies caller/target and sends password-only Auth Admin PUT; Users does not fall back to unprotected directory queries.
+- [x] Implement Forgot password email recovery on the login page so a Main Admin who cannot sign in can set a new password after verifying the recovery link. Other users can recover their own accounts through the same secure flow. Supports explicit implicit-token and PKCE recovery, verified user/session identity, confirmation matching, and password-only update followed by sign-out.
+- [ ] Verify Supabase email delivery settings and add https://newapostolicchurch.vercel.app/reset-password.html to Authentication URL Configuration Redirect URLs if it is not already allowed. These project settings and real recovery email delivery have not been tested/changed by the agent.
+- [x] Let users show/hide the password currently typed on login, user creation/reset, and recovery forms. Never reveal stored account passwords; remask and clear passwords after completion/closing. All controls have Show/Hide text and accessible state, and are versioned for mobile caches.
+- [x] All 98 mocked/static regression tests and JavaScript syntax checks passed. Tests cover password-only resets, current-account reset, unauthorized/blocked callers, password secrecy, recovery verification, real timestamp source, failed timestamp writes, protected directory authorization, and visibility/remasking. No production passwords were changed and no recovery emails were sent during tests.
 
 ## Implementation reference
 
@@ -25,5 +31,8 @@ Sources:
 - https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys
 - https://github.com/orgs/supabase/discussions/29260 — hosted backwards-compatibility exception permits Authorization when it exactly matches apikey.
 - https://github.com/supabase/auth/issues/2204 — Auth Admin-route JWT/header compatibility reports; does not prove the deployment's configured key is valid.
+- https://supabase.com/docs/reference/javascript/auth-resetpasswordforemail — resetPasswordForEmail sends the recovery link; completion uses updateUser and an allowed redirect URL.
+- https://supabase.com/docs/reference/javascript/auth-admin-listusers — server-only, paginated Auth user listing; private credentials must never be exposed in the browser.
+- https://supabase.com/docs/guides/auth/redirect-urls — recovery destination must be included in the project's redirect allow-list.
 
 Run all regression tests with `node --test tests/*.test.cjs`.
