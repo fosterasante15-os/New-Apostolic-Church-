@@ -562,11 +562,12 @@
           </section>
           <p class="reconstruction-note">Audit events are loaded from Supabase and synchronized across authorized computers and phones. Filters and CSV export use the live records.</p>
         </section>
-        <!-- Settings page reconstructed from the user-provided snapshot; settings persist in this browser only. -->
+        <!-- Authoritative cloud settings and private application backup history. -->
         <section class="screen" id="settings" aria-label="Settings">
           <p class="breadcrumb"><a href="#dashboard">Dashboard</a><span>/</span>Settings</p>
           <div class="heading-row"><div><h1>Settings</h1><p style="margin:6px 0 0;color:var(--muted)">Church profile, session, security, and backup preferences.</p></div></div>
           <p class="announcement-notice" id="settings-notice" role="status" aria-live="polite"></p>
+          <p class="announcement-notice" id="security-settings-status" role="status" aria-live="polite">Checking cloud security setup…</p>
           <form id="settings-form" class="settings-form">
             <section class="settings-card">
               <h2>Church profile</h2>
@@ -590,10 +591,17 @@
               </div>
               <label class="settings-check"><input name="autoBackupEnabled" type="checkbox"><span>Create an automatic backup at most once a day when an administrator signs in</span></label>
               <label class="settings-check settings-maintenance"><input name="maintenanceMode" type="checkbox"><span>Maintenance mode (members cannot sign in)</span></label>
-              <p class="settings-caution">Maintenance mode is a visual setting in this reconstruction only; it does not block anyone from signing in to any website.</p>
+              <p class="settings-hint">Timeout counts inactivity, not background synchronization. Failed attempts and backup retention use the shared cloud policy when setup is active.</p>
             </section>
             <div class="settings-actions"><span class="settings-dirty" id="settings-dirty" hidden>Unsaved changes</span><button class="outline-link" id="settings-reset" type="button">Reset to defaults</button><button class="primary-button" type="submit">Save settings</button></div>
           </form>
+          <section class="settings-card" style="margin-top:20px" aria-label="Private application backups">
+            <div class="heading-row"><h2>Application backups</h2><button id="backup-create" type="button" class="primary-button">Create backup</button></div>
+            <p class="settings-hint">Private snapshots of cloud application records. Passwords, Auth tokens and active sessions are not included. Oldest copies beyond the saved retention limit are removed; source records are never deleted.</p>
+            <p id="backup-status" role="status" aria-live="polite"></p><p id="backup-count"></p>
+            <div class="table-wrap"><table><thead><tr><th>Created</th><th>Records</th><th>Type</th><th>Actions</th></tr></thead><tbody id="backup-list"></tbody></table></div>
+            <p id="backup-empty" hidden>No backups have been created yet.</p>
+          </section>
           <section class="settings-card" style="margin-top:20px;">
             <h2>Cloud Database (Supabase)</h2>
             <p style="color:var(--muted);margin-bottom:14px;font-size:14px;">Connects church records to Supabase PostgreSQL, keeping members, finances, and attendance synchronized across all devices.</p>
@@ -789,11 +797,12 @@
   </dialog>
   <!-- Supabase Cloud SDK & Data Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
-  <script src="js/supabase-client.js?v=20261113-password1"></script>
+  <script src="js/supabase-client.js?v=20261113-security1"></script>
   <script src="js/password-visibility.js?v=20261113-password1"></script>
 
   <!-- Core Security & Infrastructure -->
   <script src="js/access.js?v=20261112-refresh1"></script>
+  <script src="js/security-session.js?v=20261113-security1"></script>
   <script src="js/notifications.js?v=20261115"></script>
   <script src="js/slideshow.js?v=20261115"></script>
 
@@ -810,7 +819,8 @@
   <script src="js/modules/users.js?v=20261113-password1"></script>
   <script src="js/modules/activity.js?v=20261112-refresh1"></script>
   <script src="js/modules/reports.js?v=20261112-refresh1"></script>
-  <script src="js/modules/settings.js?v=20261112-refresh1"></script>
+  <script src="js/modules/settings.js?v=20261113-security1"></script>
+  <script src="js/modules/backups.js?v=20261113-security1"></script>
   <script src="js/modules/dashboard.js?v=20261112-refresh1"></script>
 
   <!-- UI Components (Profile, Account, Theme Toggle) -->

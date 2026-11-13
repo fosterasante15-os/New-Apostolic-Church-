@@ -84,6 +84,7 @@ module.exports = async function handler(req, res) {
     const actorProfile = Array.isArray(profileResult.data) ? profileResult.data[0] : null;
     const isMainAdmin = String(actorProfile?.role || '').trim().toLowerCase() === 'main-admin' && actorProfile?.status === 'Active';
     if (!isMainAdmin) return json(res, 403, { error: 'Only an active Main Admin can reset passwords.' });
+    await require('../server/portal-security.cjs').requireSession(actor, token);
 
     // Verify that the target is a real Auth account before changing its password.
     const targetResult = await supabase(`/auth/v1/admin/users/${encodeURIComponent(userId)}`);
@@ -103,7 +104,8 @@ module.exports = async function handler(req, res) {
     if (!updated.response.ok) return json(res, 502, { error: 'The password could not be changed. Please try again.' });
 
     return json(res, 200, { ok: true, userId });
-  } catch (_) {
+  } catch (error) {
+    if (error?.status && error?.code) return json(res, error.status, { error: error.message, code: error.code });
     return json(res, 502, { error: 'Could not reach Supabase to complete the password reset. Check the account before retrying.' });
   }
 };

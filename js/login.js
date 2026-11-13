@@ -35,6 +35,7 @@
   let cached = null; try { cached = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch (_) {}
   if (cached && !window.ChurchDB?.isValidAppSession?.(cached)) clearAppSession();
   if (params.has('loggedout')) { clearAppSession(); message('You have been logged out.', true); }
+  if (params.has('timeout')) message('Your session expired after inactivity. Please sign in again.');
 
   const settings = readJson(SETTINGS_KEY, null);
   const name = settings && settings.values && String(settings.values.churchName || '').trim();
@@ -75,7 +76,7 @@
         const recorded = await window.ChurchDB.recordLoginSession();
         if (recorded.lastLogin) when = recorded.lastLogin;
       } catch (error) { loginTimeWarning = error.message || 'The profile login time could not be saved. The Auth sign-in time remains available.'; }
-      sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...session, lastLogin: when, signedInAt: when, loginTimeWarning }));
+      sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...session, lastLogin: when, signedInAt: when, loginTimeWarning, automaticBackupPending: true }));
       recordLogin(session, when);
       logActivity({ action: 'login', userId: session.id, userName: session.name, role: session.role, summary: 'Signed in to the administration system', data: { email: session.email } });
       location.replace(HOME);
@@ -92,7 +93,9 @@
   async function restoreSavedSignIn() {
     if (params.has('loggedout') || !window.ChurchDB?.client) return;
     try {
+      if (window.ChurchSecurity) await window.ChurchSecurity.ready;
       const session = await window.ChurchDB.getAppSession();
+      if (window.ChurchDB.securityPolicy?.ready) await window.ChurchDB.ensurePortalSession('open');
       if (manualSignInStarted || $('auth-email').value || $('auth-password').value) return;
       if (!window.ChurchDB.isValidAppSession(session)) { clearAppSession(); return; }
       sessionStorage.setItem(AUTH_KEY, JSON.stringify({ ...session, signedInAt: cached?.signedInAt || session.lastLogin || null, loginTimeWarning: cached?.loginTimeWarning || '' }));

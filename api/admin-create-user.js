@@ -60,6 +60,7 @@ module.exports = async function handler(req, res) {
     const isFoster = String(actor.email).toLowerCase() === MAIN_ADMIN_EMAIL;
     const isMainAdmin = (isFoster && (!actorProfile || actorProfile.status === 'Active')) || (actorProfile?.role === 'main-admin' && actorProfile?.status === 'Active');
     if (!isMainAdmin) return json(res, 403, { error: 'Only an active Main Admin can create accounts.' });
+    await require('../server/portal-security.cjs').requireSession(actor, token);
 
     let input;
     try { input = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}); } catch (_) { return json(res, 400, { error: 'Invalid JSON request.' }); }
@@ -113,7 +114,8 @@ module.exports = async function handler(req, res) {
 
     // Never return the password or the privileged server key.
     return json(res, 201, { user: { id: created.data.id, email, name, role, status, lastLogin: '—' } });
-  } catch (_) {
+  } catch (error) {
+    if (error?.status && error?.code) return json(res, error.status, { error: error.message, code: error.code });
     return json(res, 502, { error: 'Could not reach Supabase to complete account creation. Check the Users list before retrying.' });
   }
 };

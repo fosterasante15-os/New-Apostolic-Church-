@@ -12,7 +12,7 @@ function reply(status, data) {
 }
 function loadEndpoint(key, responses, adminKey = '') {
   const calls = [];
-  const context = { module: { exports: {} }, console: { warn() {} }, process: { env: { SUPABASE_SERVICE_ROLE_KEY: key, SUPABASE_AUTH_ADMIN_KEY: adminKey } }, fetch: async (url, options) => {
+  const context = { module: { exports: {} }, require: () => ({ requireSession: async () => ({ ready: false }) }), console: { warn() {} }, process: { env: { SUPABASE_SERVICE_ROLE_KEY: key, SUPABASE_AUTH_ADMIN_KEY: adminKey } }, fetch: async (url, options) => {
     calls.push({ url, ...options });
     const next = responses.shift();
     assert.ok(next, 'Unexpected upstream request');
@@ -115,7 +115,7 @@ function loadCreateUser(client, fetch) {
   const start = clientSource.indexOf('async createUserAccount(payload) {');
   const end = clientSource.indexOf('\n    async getSession()', start);
   const method = clientSource.slice(start, end).trim().replace(/,$/, '');
-  return vm.runInNewContext(`({ ${method} }).createUserAccount`, { client, fetch });
+  return vm.runInNewContext(`({ ${method} }).createUserAccount`, { client, fetch, DB: { securityPolicy: { ready: false } } });
 }
 test('browser refreshes near-expiry session before sending its own access token', async () => {
   let refreshes = 0;

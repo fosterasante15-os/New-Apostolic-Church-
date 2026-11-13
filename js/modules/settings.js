@@ -121,6 +121,21 @@
         window.dispatchEvent(new CustomEvent('maintenance-change'));
       });
 
+      async function loadAuthoritativeSettings() {
+        if (!mainAdmin || (dirty && !dirty.hidden)) return;
+        try {
+          const result = await window.ChurchDB.getSystemSettings();
+          if (!result.ready || !result.settings?.values) throw new Error('Run security-settings-migration.sql once in Supabase SQL Editor to activate these settings.');
+          localStorage.setItem(storageKey, JSON.stringify(result.settings));
+          applySettings({ ...defaultSettings(), ...result.settings.values }, result.settings.logo || '');
+          applyProfile();
+          window.ChurchDB.securityPolicy = { ready: true, ...result.policy };
+          window.dispatchEvent(new CustomEvent('security-policy-change'));
+        } catch (error) { notice.textContent = error.message || 'Could not load authoritative cloud settings.'; }
+      }
+      window.addEventListener('hashchange', () => { if (location.hash === '#settings') loadAuthoritativeSettings(); });
+      setTimeout(loadAuthoritativeSettings, 850);
+
       function readDataUrl(blob) {
         return new Promise((resolve,reject) => {
           const reader = new FileReader();
@@ -154,10 +169,8 @@
         try {
           logoData = await squareLogo(file);
           showLogo(logoData); applyLogo();
-          let saved = {};
-          try { saved = JSON.parse(localStorage.getItem(storageKey) || 'null') || {}; } catch (_) { saved = {}; }
-          try { localStorage.setItem(storageKey, JSON.stringify({ values: saved.values || defaultSettings(), logo: logoData })); announce('The logo was cropped to a square and resized to fit beside the church name.', 'success', 'Logo updated'); }
-          catch (_) { announce('Browser storage is full, so the logo applies to this session only.', 'error', 'Logo not saved'); }
+          announce('Logo preview is ready. Click Save settings to save it to the cloud.', 'info', 'Logo ready');
+          dirty.hidden = false;
         } catch (error) { announce(error.message || 'The logo could not be processed.', 'error', 'Logo not updated'); }
         logoFile.value = '';
       });
@@ -168,7 +181,12 @@
         try {
           const before = savedState();
           const values = readValues();
-          localStorage.setItem(storageKey,JSON.stringify({values,logo:logoData}));
+          const result = await window.ChurchDB.saveSystemSettings({ values, logo: logoData });
+          if (!result.ready || !result.settings?.values) throw new Error('The server did not confirm settings persistence.');
+          localStorage.setItem(storageKey, JSON.stringify(result.settings));
+          applySettings({ ...defaultSettings(), ...result.settings.values }, result.settings.logo || '');
+          window.ChurchDB.securityPolicy = { ready: true, ...result.policy };
+          window.dispatchEvent(new CustomEvent('security-policy-change'));
           window.dispatchEvent(new CustomEvent('maintenance-change'));
           pendingLogo = null; logoFile.value = ''; showLogo(logoData);
           applyProfile();
@@ -179,10 +197,19 @@
           announce(error?.name === 'QuotaExceededError' ? 'Browser storage is full; remove the logo or reduce its size, then try again.' : (error.message || 'Settings could not be saved in browser storage.'), 'error', 'Settings not saved');
         } finally { submit.disabled = false; }
       });
-      document.getElementById('settings-reset').addEventListener('click', () => {
-        form.reset();
-        logoData = ''; pendingLogo = null; logoFile.value = ''; showLogo(''); applyProfile();
-        try { localStorage.removeItem(storageKey); window.dispatchEvent(new CustomEvent('maintenance-change')); announce('All settings and the logo were restored to their defaults.', 'success', 'Settings reset', ['Church profile and logo','Session and security options','Backup and maintenance options']); }
-        catch (_) { announce('Defaults restored for this session, but browser storage could not be cleared.', 'error', 'Reset incomplete'); }
+      document.getElementById('settings-reset').addEventListener('click', async () => {
+        if (!mainAdmin || submit.disabled) return;
+        submit.disabled = true;
+        try {
+          const result = await window.ChurchDB.saveSystemSettings({ values: defaultSettings(), logo: '' });
+          if (!result.ready || !result.settings?.values) throw new Error('The server did not confirm defaults were saved.');
+          localStorage.setItem(storageKey, JSON.stringify(result.settings));
+          applySettings(result.settings.values, result.settings.logo || ''); applyProfile();
+          window.ChurchDB.securityPolicy = { ready: true, ...result.policy };
+          window.dispatchEvent(new CustomEvent('security-policy-change'));
+          window.dispatchEvent(new CustomEvent('maintenance-change'));
+          announce('Default settings are saved in Supabase and apply across devices.', 'success', 'Settings reset', ['Church profile and logo','Session and security options','Backup and maintenance options']);
+        } catch (error) { announce(error.message || 'Defaults could not be saved.', 'error', 'Reset incomplete'); }
+        finally { submit.disabled = false; }
       });
     })();

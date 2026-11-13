@@ -68,7 +68,11 @@ function environment(options = {}) {
   const context = vm.createContext({ window, document, location, localStorage, sessionStorage, Storage, URL, URLSearchParams,
     CustomEvent: class { constructor(type, details = {}) { this.type = type; Object.assign(this, details); } },
     setTimeout(fn) { const id = nextTimer++; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
-    console: { warn() {}, info() {}, log() {} }, alert() {}, fetch: async () => { throw new Error('Unexpected fetch'); } });
+    console: { warn() {}, info() {}, log() {} }, alert() {}, fetch: async url => {
+      if (url === '/api/security-login') return { ok: false, status: 503, json: async () => ({ code: 'SETUP_REQUIRED', setupRequired: true }) };
+      if (url === '/api/security-settings') return { ok: true, status: 200, json: async () => ({ ready: false, setupRequired: true }) };
+      throw new Error('Unexpected fetch');
+    } });
   vm.runInContext(source('js/supabase-client.js'), context);
   return { window, document, context, location, localStorage, sessionStorage, client, tables, calls, redirects, reloads, element, timers,
     async runTimers() { const jobs = [...timers.values()]; timers.clear(); for (const fn of jobs) await fn(); await new Promise(setImmediate); } };

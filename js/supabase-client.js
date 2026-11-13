@@ -54,7 +54,20 @@
     // ----------------------------------------------------
     async signIn(email, password) {
       if (!client) throw new Error('Supabase client is not available.');
-      const res = await client.auth.signInWithPassword({ email, password });
+      const response = await fetch('/api/security-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      let result = {}; try { result = await response.json(); } catch (_) {}
+      let res;
+      if (result.setupRequired === true && result.code === 'SETUP_REQUIRED') {
+        // Existing authentication remains available during an explicitly pending
+        // migration. Never use this fallback for network errors or active lockouts.
+        DB.securityPolicy = { ready: false };
+        res = await client.auth.signInWithPassword({ email, password });
+      } else {
+        if (!response.ok) throw Object.assign(new Error(result.error || 'Sign-in could not be completed.'), { code: result.code, retryAfterSeconds: result.retryAfterSeconds });
+        if (!result.session?.access_token || !result.session?.refresh_token) throw new Error('The server did not return a valid sign-in session.');
+        DB.securityPolicy = { ready: true, ...(result.policy || {}) };
+        res = await client.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
+      }
       if (res.error) throw res.error;
       return res.data;
     },
@@ -74,11 +87,13 @@
 
     async signOut() {
       if (!client) return;
+      if (DB.securityPolicy?.ready) { try { await DB.ensurePortalSession('close'); } catch (_) {} }
       await client.auth.signOut();
     },
 
     async createUserAccount(payload) {
       if (!client) throw new Error('Supabase client is not available.');
+      if (DB.securityPolicy?.ready) await DB.ensurePortalSession('open');
       const sessionError = () => Object.assign(new Error('Your Supabase session is missing or expired. Sign out, then sign in again as a Main Admin using the Supabase account password.'), { code: 'AUTH_REQUIRED' });
       const { data, error } = await client.auth.getSession();
       let session = data?.session || null;
@@ -107,6 +122,28 @@
 
     async resetUserPassword(payload) { return authenticatedRequest('/api/admin-reset-password', { body: payload }); },
     async recordLoginSession() { return authenticatedRequest('/api/session-profile', { body: { recordLogin: true } }); },
+    async getSecurityPolicy() {
+      const response = await fetch('/api/security-settings');
+      const result = await response.json();
+      if (!response.ok) throw Object.assign(new Error(result.error || 'Security policy could not be loaded.'), { code: result.code });
+      DB.securityPolicy = { ready: result.ready === true, ...(result.policy || {}) };
+      return result;
+    },
+    async ensurePortalSession(action = 'open') {
+      const result = await authenticatedRequest('/api/security-session', { body: { action }, skipSession: true });
+      if (result.ready === false) return result;
+      DB.securitySession = result;
+      return result;
+    },
+    async getSystemSettings() { return authenticatedRequest('/api/security-settings?full=1', { method: 'GET' }); },
+    async saveSystemSettings(settings) { return authenticatedRequest('/api/security-settings', { body: { settings } }); },
+    async listBackups() {
+      const result = await authenticatedRequest('/api/backups', { method: 'GET' });
+      if (!Array.isArray(result.backups)) throw new Error('The server returned an invalid backup list.');
+      return result.backups;
+    },
+    async createBackup({ automatic = false } = {}) { return authenticatedRequest('/api/backups', { body: { automatic } }); },
+    async downloadBackup(id) { return authenticatedRequest('/api/backups?id=' + encodeURIComponent(id), { method: 'GET' }); },
     async listUserDirectory() {
       const result = await authenticatedRequest('/api/user-directory', { method: 'GET' });
       if (!Array.isArray(result.users)) throw new Error('The server returned an invalid user directory.');
@@ -310,8 +347,9 @@
     };
   }
 
-  async function authenticatedRequest(path, { method = 'POST', body } = {}) {
+  async function authenticatedRequest(path, { method = 'POST', body, skipSession = false } = {}) {
     if (!client) throw new Error('Supabase is not available. Check your connection.');
+    if (!skipSession && DB.securityPolicy?.ready) await DB.ensurePortalSession('open');
     const current = await client.auth.getSession();
     let session = current.data?.session;
     if (current.error || !session?.access_token || (session.expires_at && session.expires_at * 1000 <= Date.now() + 60000)) {
@@ -326,7 +364,7 @@
     }
     let result = {}; try { result = await response.json(); } catch (_) {}
     if (response.status === 401) throw new Error('Your sign-in expired. Please sign in again.');
-    if (!response.ok) throw new Error(result.error || 'The account request could not be completed.');
+    if (!response.ok) throw Object.assign(new Error(result.error || 'The account request could not be completed.'), { code: result.code, setupRequired: result.setupRequired });
     return result;
   }
 
@@ -553,6 +591,15 @@
 
   async function syncSettings() {
     const meta = readMeta();
+    if (DB.securityPolicy?.ready) {
+      const { data: row, error } = await client.from('church_settings').select('*').eq('key', 'general').maybeSingle();
+      if (error) throw error;
+      if (!row?.value) return { changed: false };
+      const after = JSON.stringify(row.value), before = localStorage.getItem(STORES.settings);
+      if (before !== after) rawSetItem(STORES.settings, after);
+      meta.settingsHash = hash(stable(row.value)); writeMeta(meta);
+      return { changed: before !== after };
+    }
     const raw = localStorage.getItem(STORES.settings);
     let local = null; try { local = raw ? JSON.parse(raw) : null; } catch (_) {}
     const { data: row, error } = await client.from('church_settings').select('*').eq('key', 'general').maybeSingle();
@@ -584,6 +631,12 @@
   }
   async function runOnce() {
     if (!client) return { ok: false, changed: false, errors: ['Supabase client not loaded'] };
+    try { await DB.getSecurityPolicy(); }
+    catch (error) { return { ok: false, changed: false, errors: [error.message] }; }
+    if (DB.securityPolicy?.ready) {
+      try { await DB.ensurePortalSession('open'); }
+      catch (error) { return { ok: false, changed: false, errors: [error.message] }; }
+    }
     DB.isSyncing = true;
     let changed = false; const errors = [], changedStores = [];
     for (const name of Object.keys(COLLECTIONS)) {

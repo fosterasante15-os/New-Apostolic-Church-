@@ -22,6 +22,14 @@
 - [x] Let users show/hide the password currently typed on login, user creation/reset, and recovery forms. Never reveal stored account passwords; remask and clear passwords after completion/closing. All controls have Show/Hide text and accessible state, and are versioned for mobile caches.
 - [x] All 98 mocked/static regression tests and JavaScript syntax checks passed. Tests cover password-only resets, current-account reset, unauthorized/blocked callers, password secrecy, recovery verification, real timestamp source, failed timestamp writes, protected directory authorization, and visibility/remasking. No production passwords were changed and no recovery emails were sent during tests.
 
+## Enforced security and backup settings
+
+- [ ] Session timeout (default 30 minutes; allowed 5–1440) logs out inactive sessions, including after a backgrounded phone/tab returns. Genuine user input counts as activity; sync/polling alone does not. Supabase-backed session expiry and database/server checks must prevent silent reopening of an expired app session; timeout must not reintroduce reload loops.
+- [ ] Failed login limit (default 5; allowed 1–20) and lockout minutes (default 15; allowed 1–1440) are enforced across devices by atomic Supabase-backed counters. Incorrect credentials count, successful permitted sign-in clears failures, provider/network errors do not falsely lock accounts, and locked sign-in explains the wait time. Do not store or log passwords or use browser-only counters.
+- [ ] Backup copies to keep (default 10; allowed 1–100) limits real private Supabase application-data snapshots. Main Admins can create/list/download snapshots; oldest copies beyond retention are pruned without deleting source records. Auth passwords, tokens and session/lockout state are not backed up. The existing optional automatic-backup preference means at most once per day on administrator sign-in, not an unattended cron task.
+- [ ] Only an active Main Admin can save settings, and Save/Reset reports success only after authoritative cloud persistence. Changes apply to other devices; the form and runtime must use the authoritative policy, not stale browser defaults. Preserve existing church profile/name/logo settings.
+- [ ] Supply a one-time non-destructive migration and keep setup visibly pending until it is applied to the live Supabase project. The agent does not currently have database-management access. Do not claim global enforcement or real backup retention was activated by a Git push alone.
+
 ## Implementation reference
 
 Official Supabase documentation states that `sb_secret_...` keys are not JWTs and must travel in the `apikey` header, not `Authorization: Bearer`. Legacy service-role JWTs retain bearer compatibility. User access tokens remain bearer tokens.
@@ -36,3 +44,9 @@ Sources:
 - https://supabase.com/docs/guides/auth/redirect-urls — recovery destination must be included in the project's redirect allow-list.
 
 Run all regression tests with `node --test tests/*.test.cjs`.
+
+## Security release validation
+
+The implementation for the four displayed controls is ready. All 134 regression tests passed, including 7 actual PostgreSQL/PGlite checks executing the complete migration twice with synthetic data. Verified: shared wrong-password counts and lock expiry, provider-error cancellation, no session revival after expiry/timeout increases, private RPC/RLS enforcement, bounded real backup snapshots, durable daily auto-backup guards even after pruning, and no deletion of source records. JavaScript syntax and git diff checks also passed. Review corrections covered pending-to-ready session activation without reload, keeping cached guards active on transient policy outages, and correct unauthorized/missing-backup HTTP errors.
+
+Live activation is still pending: apply security-settings-migration.sql in the actual Supabase project, then reopen the site and verify settings show active. No migration, user-password change, or backup creation was performed against production during testing. Existing role-verified Main Admin account features intentionally remain available while the new migration is explicitly pending; once ready, server session guards and database restrictive policies apply. Missing server configuration/network failures are not treated as migration-pending authentication bypasses.

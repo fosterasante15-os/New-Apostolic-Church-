@@ -27,6 +27,7 @@ module.exports = async function handler(req, res) {
     if (!own.response.ok) return json(res, 502, { error: 'The server could not verify your account.' });
     const me = Array.isArray(own.data) ? own.data[0] : null;
     if (String(me?.role || '').trim().toLowerCase() !== 'main-admin' || String(me?.status || '').trim().toLowerCase() !== 'active') return json(res, 403, { error: 'Only an active Main Admin can view the user directory.' });
+    await require('../server/portal-security.cjs').requireSession(actor, token);
     const profiles = await request('/rest/v1/profiles?select=*&order=created_at.desc&limit=1000');
     if (!profiles.response.ok || !Array.isArray(profiles.data)) return json(res, 502, { error: 'The user profiles could not be loaded.' });
     const auth = await request('/auth/v1/admin/users?page=1&per_page=1000');
@@ -40,5 +41,8 @@ module.exports = async function handler(req, res) {
     // Only the allowlisted fields above leave the server. Never return complete
     // Auth user objects, password hashes, tokens, keys, or editable auth metadata.
     return json(res, 200, { users, warning: auth.response.ok ? '' : 'Some historical login times could not be loaded. New successful sign-ins will record their times.' });
-  } catch (_) { return json(res, 502, { error: 'Could not reach the user directory. Please try again.' }); }
+  } catch (error) {
+    if (error?.status && error?.code) return json(res, error.status, { error: error.message, code: error.code });
+    return json(res, 502, { error: 'Could not reach the user directory. Please try again.' });
+  }
 };

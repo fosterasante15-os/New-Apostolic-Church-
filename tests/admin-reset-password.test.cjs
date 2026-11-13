@@ -25,6 +25,7 @@ function loadEndpoint(key, responses, adminKey = '') {
   const calls = [];
   const context = {
     module: { exports: {} },
+    require: () => ({ requireSession: async () => ({ ready: false }) }),
     console: { warn() {} },
     process: { env: { SUPABASE_SERVICE_ROLE_KEY: key, SUPABASE_AUTH_ADMIN_KEY: adminKey } },
     fetch: async (url, options) => {

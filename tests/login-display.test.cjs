@@ -6,7 +6,7 @@ const path = require('node:path');
 const source = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 function directory(responses) {
   const calls = [];
-  const context = { module: { exports: {} }, process: { env: { SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_synthetic_test', SUPABASE_AUTH_ADMIN_KEY: 'synthetic-legacy-admin-key' } },
+  const context = { module: { exports: {} }, require: () => ({ requireSession: async () => ({ ready: false }) }), process: { env: { SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_synthetic_test', SUPABASE_AUTH_ADMIN_KEY: 'synthetic-legacy-admin-key' } },
     fetch: async (url, options) => { calls.push({ url, ...options }); const [status, data] = responses.shift(); return { ok: status >= 200 && status < 300, status, json: async () => data }; } };
   vm.runInNewContext(source('api/user-directory.js'), context);
   return { calls, async invoke(headers = { authorization: 'Bearer synthetic-user-token' }) {
