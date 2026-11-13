@@ -270,9 +270,22 @@
 
   async function verifiedAppProfile(user) {
     if (!client || !user?.id || !user?.email) throw new Error('A valid Supabase sign-in is required.');
-    const { data: profile, error } = await client.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    if (error) throw new Error('Could not verify your account profile. Check your connection and try signing in again.');
-    if (!profile) throw new Error('Your account profile is missing. Ask the Main Admin to repair your account.');
+    const lookup = await client.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    let profile = lookup.data, profileError = lookup.error, recoveryMessage = '';
+    if (!profile || profileError) {
+      try {
+        const { data } = await client.auth.getSession();
+        if (data?.session?.access_token) {
+          const response = await fetch('/api/session-profile', { method: 'POST', headers: { Authorization: `Bearer ${data.session.access_token}` } });
+          const result = await response.json();
+          if (response.ok && result.profile?.id === user.id) { profile = result.profile; profileError = null; }
+          else recoveryMessage = result.error || '';
+        }
+      } catch (_) { /* Keep the original validation error if recovery is unavailable. */ }
+    }
+    if (profileError) throw new Error(recoveryMessage || 'Could not verify your account profile. Check your connection and try signing in again.');
+    if (!profile) throw new Error(recoveryMessage || 'Your account profile is missing. Ask the Main Admin to repair your account.');
+    if (profile.id !== user.id) throw new Error('Your account profile identity could not be verified. Please contact the Main Admin.');
     const role = String(profile.role || '').trim().toLowerCase();
     const status = String(profile.status || '').trim().toLowerCase();
     if (status === 'pending') throw new Error('Your registration is pending approval by the Main Admin.');

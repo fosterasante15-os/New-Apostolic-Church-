@@ -13,6 +13,8 @@
 - [x] Break stale-session login/dashboard redirect loops. Restore valid persisted Supabase sessions on reopened tabs, verify active profile roles, and preserve the requested dashboard route after sign-in without trusting invalid cached roles. Cloud profiles are authoritative; disallowed caches are removed instead of re-forwarded; explicit logout never resumes automatically.
 - [x] All 49 dependency-free regression tests and JavaScript syntax checks passed. The suite includes 24 account tests and 25 session/sync tests with mocked Auth/database/DOM; no production test records were created. Independent review found and corrected attendance-draft, service-picker, and inline-editor issues.
 - [ ] Confirm the live deployment serves refresh1 scripts and have the user verify behavior on their actual phone/computer. Physical-device authenticated testing is not available to the agent.
+- [x] Repair existing-account profile lookup without restoring unsafe metadata-based Admin defaults. Use a verified caller's server-side profile lookup by its own Auth ID; preserve existing roles/statuses and bootstrap only the already designated, confirmed Foster owner when its profile is absent. Do not copy permissions from email-matched profiles or request/user metadata. A profile tied to another Auth ID is a conflict, not an automatic relink; concurrent blocked profiles are never overwritten.
+- [x] All 61 dependency-free mocked/static regression tests passed, including protected profile lookup, owner-only recovery, confirmed-email requirements, identity conflicts, blocked-state preservation, and browser fallback identity matching. No live profiles were created during testing; recovery occurs only on the user's verified sign-in request.
 
 ## Implementation reference
 

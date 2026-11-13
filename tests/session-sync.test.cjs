@@ -245,3 +245,19 @@ test('offering editors register a dirty guard and resume pending refreshes on re
   assert.match(offerings, /deferViewUpdatesWhile\?\.\(\(\) => Boolean\(sEdit \|\| tEdit\)\)/);
   assert.equal((offerings.match(/resumeViewUpdates/g) || []).length, 2);
 });
+
+test('browser can use a protected own-profile lookup when RLS hides the profile', async () => {
+  const env = environment({ missingProfile: true });
+  env.context.fetch = async (url, options) => {
+    assert.equal(url, '/api/session-profile'); assert.equal(options.method, 'POST');
+    assert.equal(options.headers.Authorization, 'Bearer synthetic-user-jwt');
+    return { ok: true, json: async () => ({ profile }) };
+  };
+  const session = await env.window.ChurchDB.appSessionForUser(user);
+  assert.equal(session.role, 'admin'); assert.equal(session.id, user.id);
+});
+test('a recovered profile for a different identity cannot authorize sign-in', async () => {
+  const env = environment({ missingProfile: true });
+  env.context.fetch = async () => ({ ok: true, json: async () => ({ profile: { ...profile, id: 'different-user' } }) });
+  await assert.rejects(env.window.ChurchDB.appSessionForUser(user));
+});
